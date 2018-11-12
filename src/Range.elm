@@ -30,9 +30,9 @@ type Bound subtype
     | Infinite
 
 
-type alias SubtypeConfig subtype =
+type alias SubtypeConfig error subtype =
     { toString : subtype -> String
-    , parser : Parser subtype
+    , fromString : String -> Result error subtype
     , compare : subtype -> subtype -> Order
     , canonical : Maybe (Range subtype -> Range subtype)
     }
@@ -56,14 +56,14 @@ empty =
 
 
 fromString :
-    SubtypeConfig subtype
+    SubtypeConfig error subtype
     -> String
     -> Result (List Parser.DeadEnd) (Range subtype)
 fromString subtypeConfig =
     Parser.run (parser subtypeConfig)
 
 
-toString : SubtypeConfig subtype -> Range subtype -> String
+toString : SubtypeConfig error subtype -> Range subtype -> String
 toString subtypeConfig range =
     case range of
         Empty ->
@@ -100,45 +100,48 @@ toString subtypeConfig range =
 
 
 parser :
-    SubtypeConfig subtype
+    SubtypeConfig error subtype
     -> Parser (Range subtype)
 parser subtypeConfig =
     let
+        parseSubtype ( bound, str ) =
+            if String.isEmpty str then
+                Parser.succeed Infinite
+
+            else
+                case subtypeConfig.fromString str of
+                    Ok date ->
+                        Parser.succeed (bound date)
+
+                    Err _ ->
+                        Parser.problem "Subtype `fromString` resulted in an error"
+
         lowerBoundParser =
-            Parser.oneOf
-                [ Parser.backtrackable
-                    (Parser.succeed Inclusive
+            Parser.succeed (\bound str -> ( bound, str ))
+                |= Parser.oneOf
+                    [ Parser.succeed Inclusive
                         |. Parser.symbol "["
-                        |= subtypeConfig.parser
-                    )
-                , Parser.backtrackable
-                    (Parser.succeed Exclusive
+                    , Parser.succeed Exclusive
                         |. Parser.symbol "("
-                        |= subtypeConfig.parser
-                    )
-                , Parser.succeed Infinite
-                    |. Parser.oneOf
-                        [ Parser.symbol "("
-                        , Parser.symbol "["
-                        ]
-                ]
+                    ]
+                |= Parser.getChompedString (Parser.chompUntil ",")
+                |> Parser.andThen parseSubtype
 
         upperBoundParser =
-            Parser.oneOf
-                [ Parser.succeed (\val bound -> bound val)
-                    |= subtypeConfig.parser
-                    |= Parser.oneOf
-                        [ Parser.succeed Inclusive
-                            |. Parser.symbol "]"
-                        , Parser.succeed Exclusive
-                            |. Parser.symbol ")"
+            Parser.succeed (\str bound -> ( bound, str ))
+                |= Parser.getChompedString
+                    (Parser.oneOf
+                        [ Parser.chompUntil ")"
+                        , Parser.chompUntil "]"
                         ]
-                , Parser.succeed Infinite
-                    |. Parser.oneOf
-                        [ Parser.symbol "]"
-                        , Parser.symbol ")"
-                        ]
-                ]
+                    )
+                |= Parser.oneOf
+                    [ Parser.succeed Inclusive
+                        |. Parser.symbol "]"
+                    , Parser.succeed Exclusive
+                        |. Parser.symbol ")"
+                    ]
+                |> Parser.andThen parseSubtype
 
         checkBounds :
             subtype
@@ -185,7 +188,7 @@ parser subtypeConfig =
 -- OPERATIONS
 
 
-containsElement : SubtypeConfig subtype -> subtype -> Range subtype -> Bool
+containsElement : SubtypeConfig error subtype -> subtype -> Range subtype -> Bool
 containsElement config element range =
     let
         lt_ =
@@ -368,7 +371,7 @@ upperBoundInfinite range =
 {-| Range JSON decoder
 -}
 decoder :
-    SubtypeConfig subtype
+    SubtypeConfig error subtype
     -> Decode.Decoder (Range subtype)
 decoder subtypeConfig =
     Decode.string
@@ -385,6 +388,6 @@ decoder subtypeConfig =
 
 {-| Encode Range to JSON
 -}
-encode : SubtypeConfig subtype -> Range subtype -> Encode.Value
+encode : SubtypeConfig error subtype -> Range subtype -> Encode.Value
 encode subtypeConfig =
     toString subtypeConfig >> Encode.string
