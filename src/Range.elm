@@ -1,10 +1,17 @@
 module Range exposing
     ( Range
+    , containsElement
     , decoder
     , empty
     , encode
     , fromString
+    , lowerBound
+    , lowerBoundInclusive
+    , lowerBoundInfinite
     , toString
+    , upperBound
+    , upperBoundInclusive
+    , upperBoundInfinite
     )
 
 import Json.Decode as Decode
@@ -172,6 +179,186 @@ parser subtypeConfig =
         |. Parser.symbol ","
         |= upperBoundParser
         |> Parser.andThen validate
+
+
+
+-- OPERATIONS
+
+
+containsElement : SubtypeConfig subtype -> subtype -> Range subtype -> Bool
+containsElement config element range =
+    let
+        lt_ =
+            lt config.compare
+
+        lte_ =
+            lte config.compare
+
+        gt_ =
+            gt config.compare
+
+        gte_ =
+            gte config.compare
+    in
+    case range of
+        Empty ->
+            False
+
+        Bounded bounds ->
+            case bounds of
+                ( Inclusive lower, Inclusive upper ) ->
+                    lte_ lower element && lte_ element upper
+
+                ( Inclusive lower, Exclusive upper ) ->
+                    lte_ lower element && lt_ element upper
+
+                ( Exclusive lower, Inclusive upper ) ->
+                    lt_ lower element && lte_ element upper
+
+                ( Exclusive lower, Exclusive upper ) ->
+                    lt_ lower element && lt_ element upper
+
+                ( Infinite, Inclusive upper ) ->
+                    lte_ element upper
+
+                ( Infinite, Exclusive upper ) ->
+                    lt_ element upper
+
+                ( Inclusive lower, Infinite ) ->
+                    lte_ lower element
+
+                ( Exclusive lower, Infinite ) ->
+                    lt_ lower element
+
+                ( Infinite, Infinite ) ->
+                    True
+
+
+lt : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
+lt compare a b =
+    case compare a b of
+        LT ->
+            True
+
+        _ ->
+            False
+
+
+lte : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
+lte compare a b =
+    case compare a b of
+        GT ->
+            False
+
+        _ ->
+            True
+
+
+gt : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
+gt compare a b =
+    case compare a b of
+        GT ->
+            True
+
+        _ ->
+            False
+
+
+gte : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
+gte compare a b =
+    case compare a b of
+        LT ->
+            False
+
+        _ ->
+            False
+
+
+
+-- FUNCTIONS
+
+
+lowerBound : Range subtype -> Maybe subtype
+lowerBound range =
+    case range of
+        Bounded ( lower, _ ) ->
+            boundVal lower
+
+        Empty ->
+            Nothing
+
+
+upperBound : Range subtype -> Maybe subtype
+upperBound range =
+    case range of
+        Bounded ( _, upper ) ->
+            boundVal upper
+
+        Empty ->
+            Nothing
+
+
+boundVal : Bound subtype -> Maybe subtype
+boundVal bound =
+    case bound of
+        Inclusive val ->
+            Just val
+
+        Exclusive val ->
+            Just val
+
+        Infinite ->
+            Nothing
+
+
+isEmpty : Range subtype -> Bool
+isEmpty range =
+    case range of
+        Bounded _ ->
+            False
+
+        Empty ->
+            True
+
+
+lowerBoundInclusive : Range subtype -> Bool
+lowerBoundInclusive range =
+    case range of
+        Bounded ( Inclusive _, _ ) ->
+            True
+
+        _ ->
+            False
+
+
+upperBoundInclusive : Range subtype -> Bool
+upperBoundInclusive range =
+    case range of
+        Bounded ( _, Inclusive _ ) ->
+            True
+
+        _ ->
+            False
+
+
+lowerBoundInfinite : Range subtype -> Bool
+lowerBoundInfinite range =
+    case range of
+        Bounded ( Infinite, _ ) ->
+            True
+
+        _ ->
+            False
+
+
+upperBoundInfinite : Range subtype -> Bool
+upperBoundInfinite range =
+    case range of
+        Bounded ( _, Infinite ) ->
+            True
+
+        _ ->
+            False
 
 
 
