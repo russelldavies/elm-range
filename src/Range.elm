@@ -20,11 +20,27 @@ type Range subtype
 type Bound subtype
     = Exclusive subtype
     | Inclusive subtype
-    | Unbounded
+    | Infinite
 
 
-type alias Comparator subtype =
-    subtype -> subtype -> Order
+type alias SubtypeConfig subtype =
+    { toString : subtype -> String
+    , parser : Parser subtype
+    , compare : subtype -> subtype -> Order
+    , canonical : Maybe (Range subtype -> Range subtype)
+    }
+
+
+createRange : Maybe subtype -> Maybe subtype -> Range subtype
+createRange maybeLower maybeUpper =
+    let
+        lower =
+            maybeLower |> Maybe.map Inclusive |> Maybe.withDefault Infinite
+
+        upper =
+            maybeUpper |> Maybe.map Inclusive |> Maybe.withDefault Infinite
+    in
+    Bounded ( lower, upper )
 
 
 empty : Range subtype
@@ -33,16 +49,15 @@ empty =
 
 
 fromString :
-    Parser subtype
-    -> Comparator subtype
+    SubtypeConfig subtype
     -> String
     -> Result (List Parser.DeadEnd) (Range subtype)
-fromString subtypeParser compare =
-    Parser.run (parser subtypeParser compare)
+fromString subtypeConfig =
+    Parser.run (parser subtypeConfig)
 
 
-toString : (subtype -> String) -> Range subtype -> String
-toString valToString range =
+toString : SubtypeConfig subtype -> Range subtype -> String
+toString subtypeConfig range =
     case range of
         Empty ->
             "empty"
@@ -50,52 +65,51 @@ toString valToString range =
         Bounded bounds ->
             case bounds of
                 ( Inclusive lower, Inclusive upper ) ->
-                    "[" ++ valToString lower ++ "," ++ valToString upper ++ "]"
+                    "[" ++ subtypeConfig.toString lower ++ "," ++ subtypeConfig.toString upper ++ "]"
 
                 ( Exclusive lower, Inclusive upper ) ->
-                    "(" ++ valToString lower ++ "," ++ valToString upper ++ "]"
+                    "(" ++ subtypeConfig.toString lower ++ "," ++ subtypeConfig.toString upper ++ "]"
 
                 ( Inclusive lower, Exclusive upper ) ->
-                    "[" ++ valToString lower ++ "," ++ valToString upper ++ ")"
+                    "[" ++ subtypeConfig.toString lower ++ "," ++ subtypeConfig.toString upper ++ ")"
 
                 ( Exclusive lower, Exclusive upper ) ->
-                    "(" ++ valToString lower ++ "," ++ valToString upper ++ ")"
+                    "(" ++ subtypeConfig.toString lower ++ "," ++ subtypeConfig.toString upper ++ ")"
 
-                ( Unbounded, Inclusive upper ) ->
-                    "(," ++ valToString upper ++ "]"
+                ( Infinite, Inclusive upper ) ->
+                    "(," ++ subtypeConfig.toString upper ++ "]"
 
-                ( Unbounded, Exclusive upper ) ->
-                    "(," ++ valToString upper ++ ")"
+                ( Infinite, Exclusive upper ) ->
+                    "(," ++ subtypeConfig.toString upper ++ ")"
 
-                ( Inclusive lower, Unbounded ) ->
-                    "[" ++ valToString lower ++ ",)"
+                ( Inclusive lower, Infinite ) ->
+                    "[" ++ subtypeConfig.toString lower ++ ",)"
 
-                ( Exclusive lower, Unbounded ) ->
-                    "(" ++ valToString lower ++ ",)"
+                ( Exclusive lower, Infinite ) ->
+                    "(" ++ subtypeConfig.toString lower ++ ",)"
 
-                ( Unbounded, Unbounded ) ->
+                ( Infinite, Infinite ) ->
                     "(,)"
 
 
 parser :
-    Parser subtype
-    -> Comparator subtype
+    SubtypeConfig subtype
     -> Parser (Range subtype)
-parser subtypeParser compare =
+parser subtypeConfig =
     let
         lowerBoundParser =
             Parser.oneOf
                 [ Parser.backtrackable
                     (Parser.succeed Inclusive
                         |. Parser.symbol "["
-                        |= subtypeParser
+                        |= subtypeConfig.parser
                     )
                 , Parser.backtrackable
                     (Parser.succeed Exclusive
                         |. Parser.symbol "("
-                        |= subtypeParser
+                        |= subtypeConfig.parser
                     )
-                , Parser.succeed Unbounded
+                , Parser.succeed Infinite
                     |. Parser.oneOf
                         [ Parser.symbol "("
                         , Parser.symbol "["
@@ -105,14 +119,14 @@ parser subtypeParser compare =
         upperBoundParser =
             Parser.oneOf
                 [ Parser.succeed (\val bound -> bound val)
-                    |= subtypeParser
+                    |= subtypeConfig.parser
                     |= Parser.oneOf
                         [ Parser.succeed Inclusive
                             |. Parser.symbol "]"
                         , Parser.succeed Exclusive
                             |. Parser.symbol ")"
                         ]
-                , Parser.succeed Unbounded
+                , Parser.succeed Infinite
                     |. Parser.oneOf
                         [ Parser.symbol "]"
                         , Parser.symbol ")"
@@ -125,7 +139,7 @@ parser subtypeParser compare =
             -> ( Bound subtype, Bound subtype )
             -> Parser (Range subtype)
         checkBounds lower upper bounds =
-            case compare lower upper of
+            case subtypeConfig.compare lower upper of
                 LT ->
                     Parser.succeed (Bounded bounds)
 
@@ -167,14 +181,13 @@ parser subtypeParser compare =
 {-| Range JSON decoder
 -}
 decoder :
-    Parser subtype
-    -> Comparator subtype
+    SubtypeConfig subtype
     -> Decode.Decoder (Range subtype)
-decoder subtypeParser compare =
+decoder subtypeConfig =
     Decode.string
         |> Decode.andThen
             (\rangeStr ->
-                case fromString subtypeParser compare rangeStr of
+                case fromString subtypeConfig rangeStr of
                     Ok range ->
                         Decode.succeed range
 
@@ -185,6 +198,6 @@ decoder subtypeParser compare =
 
 {-| Encode Range to JSON
 -}
-encode : (subtype -> String) -> Range subtype -> Encode.Value
-encode valToString =
-    toString valToString >> Encode.string
+encode : SubtypeConfig subtype -> Range subtype -> Encode.Value
+encode subtypeConfig =
+    toString subtypeConfig >> Encode.string
