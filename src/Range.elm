@@ -30,9 +30,9 @@ type Bound subtype
     | Infinite
 
 
-type alias SubtypeConfig error subtype =
+type alias SubtypeConfig subtype =
     { toString : subtype -> String
-    , fromString : String -> Result error subtype
+    , fromString : String -> Result String subtype
     , compare : subtype -> subtype -> Order
     , canonical : Maybe (Range subtype -> Range subtype)
     }
@@ -56,14 +56,14 @@ empty =
 
 
 fromString :
-    SubtypeConfig error subtype
+    SubtypeConfig subtype
     -> String
     -> Result (List Parser.DeadEnd) (Range subtype)
 fromString subtypeConfig =
     Parser.run (parser subtypeConfig)
 
 
-toString : SubtypeConfig error subtype -> Range subtype -> String
+toString : SubtypeConfig subtype -> Range subtype -> String
 toString subtypeConfig range =
     case range of
         Empty ->
@@ -100,7 +100,7 @@ toString subtypeConfig range =
 
 
 parser :
-    SubtypeConfig error subtype
+    SubtypeConfig subtype
     -> Parser (Range subtype)
 parser subtypeConfig =
     let
@@ -113,8 +113,8 @@ parser subtypeConfig =
                     Ok date ->
                         Parser.succeed (bound date)
 
-                    Err _ ->
-                        Parser.problem "Subtype `fromString` resulted in an error"
+                    Err error ->
+                        Parser.problem error
 
         lowerBoundParser =
             Parser.succeed (\bound str -> ( bound, str ))
@@ -188,7 +188,7 @@ parser subtypeConfig =
 -- OPERATIONS
 
 
-containsElement : SubtypeConfig error subtype -> subtype -> Range subtype -> Bool
+containsElement : SubtypeConfig subtype -> subtype -> Range subtype -> Bool
 containsElement config element range =
     let
         lt_ =
@@ -371,7 +371,7 @@ upperBoundInfinite range =
 {-| Range JSON decoder
 -}
 decoder :
-    SubtypeConfig error subtype
+    SubtypeConfig subtype
     -> Decode.Decoder (Range subtype)
 decoder subtypeConfig =
     Decode.string
@@ -388,6 +388,6 @@ decoder subtypeConfig =
 
 {-| Encode Range to JSON
 -}
-encode : SubtypeConfig error subtype -> Range subtype -> Encode.Value
+encode : SubtypeConfig subtype -> Range subtype -> Encode.Value
 encode subtypeConfig =
     toString subtypeConfig >> Encode.string
