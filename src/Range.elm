@@ -1,17 +1,20 @@
 module Range exposing
-    ( Range
+    ( Flag(..)
+    , Range
     , containsElement
+    , create
     , decoder
     , empty
     , encode
     , fromString
-    , lowerBound
+    , isEmpty
     , lowerBoundInclusive
     , lowerBoundInfinite
+    , lowerElement
     , toString
-    , upperBound
     , upperBoundInclusive
     , upperBoundInfinite
+    , upperElement
     )
 
 import Json.Decode as Decode
@@ -30,6 +33,11 @@ type Bound subtype
     | Infinite
 
 
+type Flag
+    = Inc
+    | Exc
+
+
 type alias SubtypeConfig subtype =
     { toString : subtype -> String
     , fromString : String -> Result String subtype
@@ -38,21 +46,37 @@ type alias SubtypeConfig subtype =
     }
 
 
-createRange : Maybe subtype -> Maybe subtype -> Range subtype
-createRange maybeLower maybeUpper =
-    let
-        lower =
-            maybeLower |> Maybe.map Inclusive |> Maybe.withDefault Infinite
-
-        upper =
-            maybeUpper |> Maybe.map Inclusive |> Maybe.withDefault Infinite
-    in
-    Bounded ( lower, upper )
-
-
 empty : Range subtype
 empty =
     Empty
+
+
+create :
+    Maybe subtype
+    -> Maybe subtype
+    -> ( Flag, Flag )
+    -> Range subtype
+create maybeLower maybeUpper ( lowerFlag, upperFlag ) =
+    let
+        flagToBound flag =
+            case flag of
+                Inc ->
+                    Inclusive
+
+                Exc ->
+                    Exclusive
+
+        lower =
+            maybeLower
+                |> Maybe.map (flagToBound lowerFlag)
+                |> Maybe.withDefault Infinite
+
+        upper =
+            maybeUpper
+                |> Maybe.map (flagToBound upperFlag)
+                |> Maybe.withDefault Infinite
+    in
+    Bounded ( lower, upper )
 
 
 fromString :
@@ -99,9 +123,7 @@ toString subtypeConfig range =
                     "(,)"
 
 
-parser :
-    SubtypeConfig subtype
-    -> Parser (Range subtype)
+parser : SubtypeConfig subtype -> Parser (Range subtype)
 parser subtypeConfig =
     let
         parseSubtype ( bound, str ) =
@@ -182,6 +204,13 @@ parser subtypeConfig =
         |. Parser.symbol ","
         |= upperBoundParser
         |> Parser.andThen validate
+        |> Parser.andThen
+            (\range ->
+                (Maybe.withDefault (always range) subtypeConfig.canonical
+                    >> Parser.succeed
+                )
+                    range
+            )
 
 
 
@@ -281,36 +310,23 @@ gte compare a b =
 -- FUNCTIONS
 
 
-lowerBound : Range subtype -> Maybe subtype
-lowerBound range =
+lowerElement : Range subtype -> Maybe subtype
+lowerElement range =
     case range of
         Bounded ( lower, _ ) ->
-            boundVal lower
+            boundElement lower
 
         Empty ->
             Nothing
 
 
-upperBound : Range subtype -> Maybe subtype
-upperBound range =
+upperElement : Range subtype -> Maybe subtype
+upperElement range =
     case range of
         Bounded ( _, upper ) ->
-            boundVal upper
+            boundElement upper
 
         Empty ->
-            Nothing
-
-
-boundVal : Bound subtype -> Maybe subtype
-boundVal bound =
-    case bound of
-        Inclusive val ->
-            Just val
-
-        Exclusive val ->
-            Just val
-
-        Infinite ->
             Nothing
 
 
@@ -362,6 +378,23 @@ upperBoundInfinite range =
 
         _ ->
             False
+
+
+
+
+
+
+boundElement : Bound subtype -> Maybe subtype
+boundElement bound =
+    case bound of
+        Inclusive val ->
+            Just val
+
+        Exclusive val ->
+            Just val
+
+        Infinite ->
+            Nothing
 
 
 
