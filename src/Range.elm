@@ -1,6 +1,7 @@
 module Range exposing
     ( Flag(..)
     , Range
+    , SubtypeConfig
     , containsElement
     , create
     , decoder
@@ -22,6 +23,10 @@ import Json.Encode as Encode
 import Parser exposing ((|.), (|=), Parser)
 
 
+
+-- MODELS
+
+
 type Range subtype
     = Bounded ( Bound subtype, Bound subtype )
     | Empty
@@ -33,17 +38,21 @@ type Bound subtype
     | Infinite
 
 
+type alias SubtypeConfig subtype =
+    { toString : subtype -> String
+    , fromString : String -> Result String subtype
+    , compare : subtype -> subtype -> Order
+    , canonical : Maybe (Range subtype -> ( ( Maybe subtype, Maybe subtype ), ( Flag, Flag ) ))
+    }
+
+
 type Flag
     = Inc
     | Exc
 
 
-type alias SubtypeConfig subtype =
-    { toString : subtype -> String
-    , fromString : String -> Result String subtype
-    , compare : subtype -> subtype -> Order
-    , canonical : Maybe (Range subtype -> Range subtype)
-    }
+
+-- CREATE
 
 
 empty : Range subtype
@@ -52,31 +61,16 @@ empty =
 
 
 create :
-    Maybe subtype
+    SubtypeConfig subtype
+    -> Maybe subtype
     -> Maybe subtype
     -> ( Flag, Flag )
-    -> Range subtype
-create maybeLower maybeUpper ( lowerFlag, upperFlag ) =
-    let
-        flagToBound flag =
-            case flag of
-                Inc ->
-                    Inclusive
-
-                Exc ->
-                    Exclusive
-
-        lower =
-            maybeLower
-                |> Maybe.map (flagToBound lowerFlag)
-                |> Maybe.withDefault Infinite
-
-        upper =
-            maybeUpper
-                |> Maybe.map (flagToBound upperFlag)
-                |> Maybe.withDefault Infinite
-    in
-    Bounded ( lower, upper )
+    -> Result String (Range subtype)
+create subtypeConfig maybeLower maybeUpper flags =
+    -- Flags are mandatory as it will be the subtype's canonical function that
+    -- specifies the convention to use.
+    construct ( ( maybeLower, maybeUpper ), flags )
+        |> validate subtypeConfig
 
 
 fromString :
@@ -121,96 +115,6 @@ toString subtypeConfig range =
 
                 ( Infinite, Infinite ) ->
                     "(,)"
-
-
-parser : SubtypeConfig subtype -> Parser (Range subtype)
-parser subtypeConfig =
-    let
-        parseSubtype ( bound, str ) =
-            if String.isEmpty str then
-                Parser.succeed Infinite
-
-            else
-                case subtypeConfig.fromString str of
-                    Ok date ->
-                        Parser.succeed (bound date)
-
-                    Err error ->
-                        Parser.problem error
-
-        lowerBoundParser =
-            Parser.succeed (\bound str -> ( bound, str ))
-                |= Parser.oneOf
-                    [ Parser.succeed Inclusive
-                        |. Parser.symbol "["
-                    , Parser.succeed Exclusive
-                        |. Parser.symbol "("
-                    ]
-                |= Parser.getChompedString (Parser.chompUntil ",")
-                |> Parser.andThen parseSubtype
-
-        upperBoundParser =
-            Parser.succeed (\str bound -> ( bound, str ))
-                |= Parser.getChompedString
-                    (Parser.oneOf
-                        [ Parser.chompUntil ")"
-                        , Parser.chompUntil "]"
-                        ]
-                    )
-                |= Parser.oneOf
-                    [ Parser.succeed Inclusive
-                        |. Parser.symbol "]"
-                    , Parser.succeed Exclusive
-                        |. Parser.symbol ")"
-                    ]
-                |> Parser.andThen parseSubtype
-
-        checkBounds :
-            subtype
-            -> subtype
-            -> ( Bound subtype, Bound subtype )
-            -> Parser (Range subtype)
-        checkBounds lower upper bounds =
-            case subtypeConfig.compare lower upper of
-                LT ->
-                    Parser.succeed (Bounded bounds)
-
-                EQ ->
-                    Parser.succeed Empty
-
-                GT ->
-                    Parser.problem "Range lower bound must be less than or equal to range upper bound"
-
-        validate : ( Bound subtype, Bound subtype ) -> Parser (Range subtype)
-        validate bounds =
-            case bounds of
-                ( Exclusive lower, Exclusive upper ) ->
-                    checkBounds lower upper bounds
-
-                ( Inclusive lower, Exclusive upper ) ->
-                    checkBounds lower upper bounds
-
-                ( Exclusive lower, Inclusive upper ) ->
-                    checkBounds lower upper bounds
-
-                ( Inclusive lower, Inclusive upper ) ->
-                    checkBounds lower upper bounds
-
-                _ ->
-                    Parser.succeed (Bounded bounds)
-    in
-    Parser.succeed Tuple.pair
-        |= lowerBoundParser
-        |. Parser.symbol ","
-        |= upperBoundParser
-        |> Parser.andThen validate
-        |> Parser.andThen
-            (\range ->
-                (Maybe.withDefault (always range) subtypeConfig.canonical
-                    >> Parser.succeed
-                )
-                    range
-            )
 
 
 
@@ -264,46 +168,6 @@ containsElement config element range =
 
                 ( Infinite, Infinite ) ->
                     True
-
-
-lt : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
-lt compare a b =
-    case compare a b of
-        LT ->
-            True
-
-        _ ->
-            False
-
-
-lte : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
-lte compare a b =
-    case compare a b of
-        GT ->
-            False
-
-        _ ->
-            True
-
-
-gt : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
-gt compare a b =
-    case compare a b of
-        GT ->
-            True
-
-        _ ->
-            False
-
-
-gte : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
-gte compare a b =
-    case compare a b of
-        LT ->
-            False
-
-        _ ->
-            False
 
 
 
@@ -381,23 +245,6 @@ upperBoundInfinite range =
 
 
 
-
-
-
-boundElement : Bound subtype -> Maybe subtype
-boundElement bound =
-    case bound of
-        Inclusive val ->
-            Just val
-
-        Exclusive val ->
-            Just val
-
-        Infinite ->
-            Nothing
-
-
-
 -- JSON
 
 
@@ -424,3 +271,173 @@ decoder subtypeConfig =
 encode : SubtypeConfig subtype -> Range subtype -> Encode.Value
 encode subtypeConfig =
     toString subtypeConfig >> Encode.string
+
+
+
+-- HELPERS
+
+
+validate : SubtypeConfig subtype -> Range subtype -> Result String (Range subtype)
+validate { canonical, compare } range_ =
+    let
+        checkBounds range =
+            case Maybe.map2 compare (lowerElement range) (upperElement range) of
+                Just order ->
+                    case order of
+                        LT ->
+                            Ok range
+
+                        EQ ->
+                            Ok Empty
+
+                        GT ->
+                            Err "Lower bound must be less than or equal to upper bound"
+
+                Nothing ->
+                    Ok range
+
+        canonicalize range =
+            case canonical of
+                Nothing ->
+                    range
+
+                Just fn ->
+                    construct (fn range)
+    in
+    range_
+        |> canonicalize
+        |> checkBounds
+
+
+construct : ( ( Maybe subtype, Maybe subtype ), ( Flag, Flag ) ) -> Range subtype
+construct ( ( maybeLower, maybeUpper ), ( lowerFlag, upperFlag ) ) =
+    let
+        flagToBound flag =
+            case flag of
+                Inc ->
+                    Inclusive
+
+                Exc ->
+                    Exclusive
+
+        lower =
+            maybeLower
+                |> Maybe.map (flagToBound lowerFlag)
+                |> Maybe.withDefault Infinite
+
+        upper =
+            maybeUpper
+                |> Maybe.map (flagToBound upperFlag)
+                |> Maybe.withDefault Infinite
+    in
+    Bounded ( lower, upper )
+
+
+parser : SubtypeConfig subtype -> Parser (Range subtype)
+parser subtypeConfig =
+    let
+        parseSubtype ( bound, str ) =
+            if String.isEmpty str then
+                Parser.succeed Infinite
+
+            else
+                case subtypeConfig.fromString str of
+                    Ok date ->
+                        Parser.succeed (bound date)
+
+                    Err error ->
+                        Parser.problem error
+
+        lowerBoundParser =
+            Parser.succeed (\bound str -> ( bound, str ))
+                |= Parser.oneOf
+                    [ Parser.succeed Inclusive
+                        |. Parser.symbol "["
+                    , Parser.succeed Exclusive
+                        |. Parser.symbol "("
+                    ]
+                |= Parser.getChompedString (Parser.chompUntil ",")
+                |> Parser.andThen parseSubtype
+
+        upperBoundParser =
+            Parser.succeed (\str bound -> ( bound, str ))
+                |= Parser.getChompedString
+                    (Parser.oneOf
+                        [ Parser.chompUntil ")"
+                        , Parser.chompUntil "]"
+                        ]
+                    )
+                |= Parser.oneOf
+                    [ Parser.succeed Inclusive
+                        |. Parser.symbol "]"
+                    , Parser.succeed Exclusive
+                        |. Parser.symbol ")"
+                    ]
+                |> Parser.andThen parseSubtype
+    in
+    Parser.succeed (\lower upper -> Bounded ( lower, upper ))
+        |= lowerBoundParser
+        |. Parser.symbol ","
+        |= upperBoundParser
+        |> Parser.andThen
+            (\range ->
+                case validate subtypeConfig range of
+                    Ok range_ ->
+                        Parser.succeed range_
+
+                    Err err ->
+                        Parser.problem err
+            )
+
+
+boundElement : Bound subtype -> Maybe subtype
+boundElement bound =
+    case bound of
+        Inclusive val ->
+            Just val
+
+        Exclusive val ->
+            Just val
+
+        Infinite ->
+            Nothing
+
+
+lt : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
+lt compare a b =
+    case compare a b of
+        LT ->
+            True
+
+        _ ->
+            False
+
+
+lte : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
+lte compare a b =
+    case compare a b of
+        GT ->
+            False
+
+        _ ->
+            True
+
+
+gt : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
+gt compare a b =
+    case compare a b of
+        GT ->
+            True
+
+        _ ->
+            False
+
+
+gte : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
+gte compare a b =
+    case compare a b of
+        LT ->
+            False
+
+        _ ->
+            False
