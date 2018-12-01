@@ -2,6 +2,20 @@
 
 Model and operate on a range of values in Elm.
 
+```elm
+> range1 = (Range.Int.fromString "[1,5]")
+Ok (Bounded (Inclusive 1,Exclusive 6))
+    : Result (List Parser.DeadEnd) (Range.Range Int)
+
+> range2 = (Range.Int.fromString "(4,10]")
+Ok (Bounded (Inclusive 5,Exclusive 11))
+    : Result (List Parser.DeadEnd) (Range.Range Int)
+
+> Result.map2 Range.Int.merge range1 range2
+Ok (Bounded (Inclusive 1,Exclusive 11))
+    : Result (List Parser.DeadEnd) (Range.Range Int)
+```
+
 ## Overview
 
 The concept of a range is inspired from PostgreSQL's [Range
