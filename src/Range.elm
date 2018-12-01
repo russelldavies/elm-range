@@ -12,6 +12,7 @@ module Range exposing
     , lowerBoundInclusive
     , lowerBoundInfinite
     , lowerElement
+    , merge
     , toString
     , upperBoundInclusive
     , upperBoundInfinite
@@ -122,19 +123,19 @@ toString subtypeConfig range =
 
 
 containsElement : SubtypeConfig subtype -> subtype -> Range subtype -> Bool
-containsElement config element range =
+containsElement { compare } element range =
     let
         lt_ =
-            lt config.compare
+            lt compare
 
         lte_ =
-            lte config.compare
+            lte compare
 
         gt_ =
-            gt config.compare
+            gt compare
 
         gte_ =
-            gte config.compare
+            gte compare
     in
     case range of
         Empty ->
@@ -242,6 +243,37 @@ upperBoundInfinite range =
 
         _ ->
             False
+
+
+merge : SubtypeConfig subtype -> Range subtype -> Range subtype -> Range subtype
+merge { compare } range1 range2 =
+    case ( range1, range2 ) of
+        ( Empty, Empty ) ->
+            Empty
+
+        ( Bounded _, Empty ) ->
+            range1
+
+        ( Empty, Bounded _ ) ->
+            range2
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            let
+                lower =
+                    if compareBounds compare ( lower1, True ) ( lower2, True ) == LT then
+                        lower1
+
+                    else
+                        lower2
+
+                upper =
+                    if compareBounds compare ( upper1, False ) ( upper2, False ) == GT then
+                        upper1
+
+                    else
+                        upper2
+            in
+            Bounded ( lower, upper )
 
 
 
@@ -441,3 +473,107 @@ gte compare a b =
 
         _ ->
             False
+
+
+{-| Compare two bounds.
+
+The bounds can be any combination of upper and lower which makes this a useful
+helper function.
+
+The simple case is when both bounds are finite and inclusive, the result is a
+simple comparison of their values.
+
+If a bound is exclusive, then we need to know whether it's a lower bound, in
+which case we treat the boundary point as "just greater than" the held value;
+or an upper bound, in which case we treat the boundary point as "just less
+than" the held value.
+
+If a bound is infinite, it represents minus infinity (less than every other
+point) if it's a lower bound; or plus infinity (greater than every other point)
+if it's an upper bound.
+
+There is only one case where two boundaries compare equal but are not
+identical: when both bounds are inclusive and hold the same finite value, but
+one is an upper bound and the other a lower bound.
+
+-}
+compareBounds : (subtype -> subtype -> Order) -> ( Bound subtype, Bool ) -> ( Bound subtype, Bool ) -> Order
+compareBounds compare ( bound1, bound1Lower ) ( bound2, bound2Lower ) =
+    case ( bound1, bound2 ) of
+        ( Infinite, Infinite ) ->
+            if bound1Lower && bound2Lower then
+                EQ
+
+            else if bound1Lower then
+                LT
+
+            else
+                GT
+
+        ( Infinite, _ ) ->
+            if bound1Lower then
+                LT
+
+            else
+                GT
+
+        ( _, Infinite ) ->
+            if bound2Lower then
+                GT
+
+            else
+                LT
+
+        ( Exclusive bound1Val, Exclusive bound2Val ) ->
+            if compare bound1Val bound2Val == EQ then
+                EQ
+
+            else if bound1Lower && bound2Lower then
+                EQ
+
+            else if bound1Lower then
+                GT
+
+            else
+                LT
+
+        ( Exclusive bound1Val, Inclusive bound2Val ) ->
+            if compare bound1Val bound2Val == EQ then
+                EQ
+
+            else if bound1Lower then
+                GT
+
+            else
+                LT
+
+        ( Inclusive bound1Val, Exclusive bound2Val ) ->
+            if compare bound1Val bound2Val == EQ then
+                EQ
+
+            else if bound2Lower then
+                LT
+
+            else
+                GT
+
+        ( Inclusive bound1Val, Inclusive bound2Val ) ->
+            compare bound1Val bound2Val
+
+
+min : (subtype -> subtype -> Order) -> subtype -> subtype -> subtype
+min compare x y =
+    if lt compare x y then
+        x
+
+    else
+        y
+
+
+max : (subtype -> subtype -> Order) -> subtype -> subtype -> subtype
+max compare x y =
+    if gt compare x y then
+        x
+
+    else
+        y
