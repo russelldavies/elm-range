@@ -17,7 +17,7 @@ import Range exposing (Range)
 config : Range.SubtypeConfig Int
 config =
     { toString = String.fromInt
-    , fromString = String.toInt >> Result.fromMaybe "Invalid number"
+    , fromString = String.toInt >> Result.fromMaybe "Invalid integer"
     , compare = Basics.compare
     , canonical = Just canonical
     }

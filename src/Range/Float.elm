@@ -16,9 +16,9 @@ import Range exposing (Range)
 
 config =
     { toString = String.fromFloat
-    , fromString = String.toFloat >> Result.fromMaybe "Invalid number"
+    , fromString = String.toFloat >> Result.fromMaybe "Invalid float"
     , compare = Basics.compare
-    , canonical = Just canonical
+    , canonical = Nothing
     }
 
 
@@ -55,23 +55,3 @@ decoder =
 encode : Range Float -> Encode.Value
 encode =
     Range.encode config
-
-
-canonical : Range Float -> ( ( Maybe Float, Maybe Float ), ( Range.Flag, Range.Flag ) )
-canonical range =
-    let
-        lowerElement =
-            if Range.lowerBoundInclusive range then
-                Range.lowerElement range
-
-            else
-                (Range.lowerElement >> Maybe.map ((+) 1)) range
-
-        upperElement =
-            if Range.upperBoundInclusive range then
-                (Range.upperElement >> Maybe.map ((+) 1)) range
-
-            else
-                Range.upperElement range
-    in
-    ( ( lowerElement, upperElement ), ( Range.Inc, Range.Exc ) )
