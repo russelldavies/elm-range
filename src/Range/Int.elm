@@ -1,8 +1,10 @@
 module Range.Int exposing
-    ( containsElement
+    ( config
+    , containsElement
     , create
     , decoder
     , encode
+    , equal
     , fromString
     , merge
     , toString
@@ -38,9 +40,14 @@ create maybeLower maybeUpper maybeFlags =
     Range.create config maybeLower maybeUpper (Maybe.withDefault ( Range.Inc, Range.Exc ) maybeFlags)
 
 
-containsElement : Int -> Range Int -> Bool
+containsElement : Range Int -> Int -> Bool
 containsElement =
     Range.containsElement config
+
+
+equal : Range Int -> Range Int -> Bool
+equal =
+    Range.equal config
 
 
 merge : Range Int -> Range Int -> Range Int

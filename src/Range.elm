@@ -3,10 +3,12 @@ module Range exposing
     , Range
     , SubtypeConfig
     , containsElement
+    , containsRange
     , create
     , decoder
     , empty
     , encode
+    , equal
     , fromString
     , isEmpty
     , lowerBoundInclusive
@@ -122,8 +124,61 @@ toString subtypeConfig range =
 -- OPERATIONS
 
 
-containsElement : SubtypeConfig subtype -> subtype -> Range subtype -> Bool
-containsElement { compare } element range =
+equal : SubtypeConfig subtype -> Range subtype -> Range subtype -> Bool
+equal { compare } r1 r2 =
+    if isEmpty r1 && isEmpty r2 then
+        True
+
+    else
+        let
+            orderEqual order =
+                if order == EQ then
+                    True
+
+                else
+                    False
+
+            lowerEqual =
+                Maybe.map2 compare (lowerElement r1) (lowerElement r2)
+                    |> Maybe.map orderEqual
+                    |> Maybe.withDefault False
+
+            upperEqual =
+                Maybe.map2 compare (upperElement r1) (upperElement r2)
+                    |> Maybe.map orderEqual
+                    |> Maybe.withDefault False
+        in
+        lowerEqual && upperEqual
+
+
+lessThan : SubtypeConfig subtype -> Range subtype -> Range subtype -> Order
+lessThan { compare } r1 r2 =
+    case ( isEmpty r1, isEmpty r2 ) of
+        ( True, True ) ->
+            EQ
+
+        ( True, False ) ->
+            LT
+
+        ( False, True ) ->
+            GT
+
+        ( False, False ) ->
+            EQ
+
+
+containsRange : SubtypeConfig subtype -> Range subtype -> Range subtype -> Bool
+containsRange ({ compare } as config) outerRange innerRange =
+    let
+        comp el =
+            Maybe.map (containsElement config outerRange) (el innerRange)
+                |> Maybe.withDefault False
+    in
+    comp lowerElement && comp upperElement
+
+
+containsElement : SubtypeConfig subtype -> Range subtype -> subtype -> Bool
+containsElement { compare } range element =
     let
         lt_ =
             lt compare
