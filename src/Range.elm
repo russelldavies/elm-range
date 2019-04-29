@@ -316,6 +316,27 @@ validate { canonical, compare } range_ =
             case Maybe.map2 compare (lowerElement range) (upperElement range) of
                 Just order ->
                     case order of
+                        GT ->
+                            Err "Lower bound must be less than or equal to upper bound"
+
+                        EQ ->
+                            -- Edge case: if bounds are equal, and both exclusive, range is empty
+                            if not (lowerBoundInclusive range || upperBoundInclusive range) then
+                                Ok Empty
+
+                            else
+                                range |> canonicalize |> normalize
+
+                        _ ->
+                            range |> canonicalize |> normalize
+
+                Nothing ->
+                    range |> canonicalize |> normalize
+
+        normalize range =
+            case Maybe.map2 compare (lowerElement range) (upperElement range) of
+                Just order ->
+                    case order of
                         LT ->
                             Ok range
 
@@ -337,7 +358,6 @@ validate { canonical, compare } range_ =
                     construct (fn range)
     in
     range_
-        |> canonicalize
         |> checkBounds
 
 
