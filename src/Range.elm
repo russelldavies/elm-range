@@ -49,6 +49,11 @@ type alias SubtypeConfig subtype =
     }
 
 
+type BoundType
+    = LowerBound
+    | UpperBound
+
+
 type Flag
     = Inc
     | Exc
@@ -126,29 +131,16 @@ toString subtypeConfig range =
 
 equal : SubtypeConfig subtype -> Range subtype -> Range subtype -> Bool
 equal { compare } r1 r2 =
-    if isEmpty r1 && isEmpty r2 then
-        True
+    case ( r1, r2 ) of
+        ( Empty, Empty ) ->
+            True
 
-    else
-        let
-            orderEqual order =
-                if order == EQ then
-                    True
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            (compareLowerBounds compare lower1 lower2 |> orderIsEqual)
+                && (compareUpperBounds compare upper1 upper2 |> orderIsEqual)
 
-                else
-                    False
-
-            lowerEqual =
-                Maybe.map2 compare (lowerElement r1) (lowerElement r2)
-                    |> Maybe.map orderEqual
-                    |> Maybe.withDefault False
-
-            upperEqual =
-                Maybe.map2 compare (upperElement r1) (upperElement r2)
-                    |> Maybe.map orderEqual
-                    |> Maybe.withDefault False
-        in
-        lowerEqual && upperEqual
+        _ ->
+            False
 
 
 lessThan : SubtypeConfig subtype -> Range subtype -> Range subtype -> Order
@@ -315,14 +307,14 @@ merge { compare } range1 range2 =
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
             let
                 lower =
-                    if compareBounds compare ( lower1, True ) ( lower2, True ) == LT then
+                    if compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound ) == LT then
                         lower1
 
                     else
                         lower2
 
                 upper =
-                    if compareBounds compare ( upper1, False ) ( upper2, False ) == GT then
+                    if compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound ) == GT then
                         upper1
 
                     else
@@ -572,28 +564,33 @@ identical: when both bounds are inclusive and hold the same finite value, but
 one is an upper bound and the other a lower bound.
 
 -}
-compareBounds : (subtype -> subtype -> Order) -> ( Bound subtype, Bool ) -> ( Bound subtype, Bool ) -> Order
-compareBounds compare ( bound1, bound1Lower ) ( bound2, bound2Lower ) =
+compareBounds :
+    (subtype -> subtype -> Order)
+    -> ( Bound subtype, BoundType )
+    -> ( Bound subtype, BoundType )
+    -> Order
+compareBounds compare ( bound1, bound1Type ) ( bound2, bound2Type ) =
     case ( bound1, bound2 ) of
         ( Infinite, Infinite ) ->
-            if bound1Lower && bound2Lower then
-                EQ
+            case ( bound1Type, bound2Type ) of
+                ( LowerBound, LowerBound ) ->
+                    EQ
 
-            else if bound1Lower then
-                LT
+                ( LowerBound, _ ) ->
+                    LT
 
-            else
-                GT
+                _ ->
+                    GT
 
         ( Infinite, _ ) ->
-            if bound1Lower then
+            if bound1Type == LowerBound then
                 LT
 
             else
                 GT
 
         ( _, Infinite ) ->
-            if bound2Lower then
+            if bound2Type == LowerBound then
                 GT
 
             else
@@ -603,10 +600,10 @@ compareBounds compare ( bound1, bound1Lower ) ( bound2, bound2Lower ) =
             if compare bound1Val bound2Val == EQ then
                 EQ
 
-            else if bound1Lower && bound2Lower then
+            else if bound1Type == LowerBound && bound2Type == LowerBound then
                 EQ
 
-            else if bound1Lower then
+            else if bound1Type == LowerBound then
                 GT
 
             else
@@ -616,7 +613,7 @@ compareBounds compare ( bound1, bound1Lower ) ( bound2, bound2Lower ) =
             if compare bound1Val bound2Val == EQ then
                 EQ
 
-            else if bound1Lower then
+            else if bound1Type == LowerBound then
                 GT
 
             else
@@ -626,7 +623,7 @@ compareBounds compare ( bound1, bound1Lower ) ( bound2, bound2Lower ) =
             if compare bound1Val bound2Val == EQ then
                 EQ
 
-            else if bound2Lower then
+            else if bound2Type == LowerBound then
                 LT
 
             else
@@ -634,6 +631,24 @@ compareBounds compare ( bound1, bound1Lower ) ( bound2, bound2Lower ) =
 
         ( Inclusive bound1Val, Inclusive bound2Val ) ->
             compare bound1Val bound2Val
+
+
+compareLowerBounds :
+    (subtype -> subtype -> Order)
+    -> Bound subtype
+    -> Bound subtype
+    -> Order
+compareLowerBounds compare bound1 bound2 =
+    compareBounds compare ( bound1, LowerBound ) ( bound2, LowerBound )
+
+
+compareUpperBounds :
+    (subtype -> subtype -> Order)
+    -> Bound subtype
+    -> Bound subtype
+    -> Order
+compareUpperBounds compare bound1 bound2 =
+    compareBounds compare ( bound1, UpperBound ) ( bound2, UpperBound )
 
 
 min : (subtype -> subtype -> Order) -> subtype -> subtype -> subtype
@@ -652,3 +667,12 @@ max compare x y =
 
     else
         y
+
+
+orderIsEqual : Order -> Bool
+orderIsEqual order =
+    if order == EQ then
+        True
+
+    else
+        False
