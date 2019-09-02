@@ -136,8 +136,8 @@ equal { compare } r1 r2 =
             True
 
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
-            (compareLowerBounds compare lower1 lower2 |> orderIsEqual)
-                && (compareUpperBounds compare upper1 upper2 |> orderIsEqual)
+            (compareLowerBounds compare lower1 lower2 |> (==) EQ)
+                && (compareUpperBounds compare upper1 upper2 |> (==) EQ)
 
         _ ->
             False
@@ -667,12 +667,3 @@ max compare x y =
 
     else
         y
-
-
-orderIsEqual : Order -> Bool
-orderIsEqual order =
-    if order == EQ then
-        True
-
-    else
-        False
