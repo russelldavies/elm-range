@@ -1,5 +1,5 @@
 module Range exposing
-    ( Flag(..)
+    ( BoundFlag(..)
     , Range
     , SubtypeConfig
     , containsElement
@@ -45,18 +45,18 @@ type alias SubtypeConfig subtype =
     { toString : subtype -> String
     , fromString : String -> Result String subtype
     , compare : subtype -> subtype -> Order
-    , canonical : Maybe (Range subtype -> ( ( Maybe subtype, Maybe subtype ), ( Flag, Flag ) ))
+    , canonical : Maybe (Range subtype -> ( ( Maybe subtype, Maybe subtype ), ( BoundFlag, BoundFlag ) ))
     }
+
+
+type BoundFlag
+    = Inc
+    | Exc
 
 
 type BoundType
     = LowerBound
     | UpperBound
-
-
-type Flag
-    = Inc
-    | Exc
 
 
 
@@ -72,13 +72,12 @@ create :
     SubtypeConfig subtype
     -> Maybe subtype
     -> Maybe subtype
-    -> ( Flag, Flag )
+    -> ( BoundFlag, BoundFlag )
     -> Result String (Range subtype)
 create subtypeConfig maybeLower maybeUpper flags =
     -- Flags are mandatory as it will be the subtype's canonical function that
     -- specifies the convention to use.
-    construct ( ( maybeLower, maybeUpper ), flags )
-        |> validate subtypeConfig
+    construct ( ( maybeLower, maybeUpper ), flags ) |> validate subtypeConfig
 
 
 fromString :
@@ -408,7 +407,7 @@ validate { canonical, compare } range_ =
         |> checkBounds
 
 
-construct : ( ( Maybe subtype, Maybe subtype ), ( Flag, Flag ) ) -> Range subtype
+construct : ( ( Maybe subtype, Maybe subtype ), ( BoundFlag, BoundFlag ) ) -> Range subtype
 construct ( ( maybeLower, maybeUpper ), ( lowerFlag, upperFlag ) ) =
     let
         flagToBound flag =

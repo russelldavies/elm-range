@@ -25,6 +25,11 @@ config =
     }
 
 
+create : Maybe Int -> Maybe Int -> Maybe ( Range.BoundFlag, Range.BoundFlag ) -> Result String (Range Int)
+create maybeLower maybeUpper maybeBoundFlags =
+    Range.create config maybeLower maybeUpper (Maybe.withDefault ( Range.Inc, Range.Exc ) maybeBoundFlags)
+
+
 fromString : String -> Result (List Parser.DeadEnd) (Range Int)
 fromString =
     Range.fromString config
@@ -33,11 +38,6 @@ fromString =
 toString : Range Int -> String
 toString =
     Range.toString config
-
-
-create : Maybe Int -> Maybe Int -> Maybe ( Range.Flag, Range.Flag ) -> Result String (Range Int)
-create maybeLower maybeUpper maybeFlags =
-    Range.create config maybeLower maybeUpper (Maybe.withDefault ( Range.Inc, Range.Exc ) maybeFlags)
 
 
 containsElement : Range Int -> Int -> Bool
@@ -65,7 +65,7 @@ encode =
     Range.encode config
 
 
-canonical : Range Int -> ( ( Maybe Int, Maybe Int ), ( Range.Flag, Range.Flag ) )
+canonical : Range Int -> ( ( Maybe Int, Maybe Int ), ( Range.BoundFlag, Range.BoundFlag ) )
 canonical range =
     let
         lowerElement =
