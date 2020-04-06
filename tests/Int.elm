@@ -16,9 +16,9 @@ import Test exposing (..)
 canonical : Test
 canonical =
     describe "Verifies Int canonical function"
-        [ fuzz3 Fuzz.int Fuzz.int boundFlagFuzzer "Random bound values and flags" <|
-            \lowerElement upperElement (( lowerBoundFlag, upperBoundFlag ) as boundFlags) ->
-                case Range.Int.create (Just lowerElement) (Just upperElement) (Just boundFlags) of
+        [ fuzz3 (Fuzz.maybe Fuzz.int) (Fuzz.maybe Fuzz.int) boundFlagFuzzer "Random bound values and flags" <|
+            \maybeLowerElement maybeUpperElement (( lowerBoundFlag, upperBoundFlag ) as boundFlags) ->
+                case Range.Int.create maybeLowerElement maybeUpperElement (Just boundFlags) of
                     Ok range ->
                         let
                             canonicalize flag expectedFlag el =
@@ -28,42 +28,70 @@ canonical =
                                 else
                                     el + 1
 
+                            upperElementExpectation upperElement =
+                                Range.upperElement
+                                    >> Maybe.map (Expect.equal (canonicalize upperBoundFlag Range.Exc upperElement))
+                                    >> Maybe.withDefault (Expect.fail "Upper bound missing")
+
+                            lowerElementExpectation lowerElement =
+                                Range.lowerElement
+                                    >> Maybe.map (Expect.equal (canonicalize lowerBoundFlag Range.Inc lowerElement))
+                                    >> Maybe.withDefault (Expect.fail "Lower bound missing")
+
                             bothInclusive =
                                 lowerBoundFlag == Range.Inc && upperBoundFlag == Range.Inc
 
                             bothExclusive =
                                 lowerBoundFlag == Range.Exc && upperBoundFlag == Range.Exc
                         in
-                        if
-                            (upperElement == lowerElement && not bothInclusive)
-                                || (upperElement - lowerElement == 1 && bothExclusive)
-                        then
-                            Expect.true "Expected empty range" (Range.isEmpty range)
+                        case ( maybeLowerElement, maybeUpperElement ) of
+                            ( Just lowerElement, Just upperElement ) ->
+                                if
+                                    (upperElement == lowerElement && not bothInclusive)
+                                        || (upperElement - lowerElement == 1 && bothExclusive)
+                                then
+                                    Expect.true "Expected empty range" (Range.isEmpty range)
 
-                        else
-                            Expect.all
-                                [ expectedLowerBoundInclusive
-                                , expectedUpperBoundExclusive
-                                , Range.lowerElement
-                                    >> Maybe.map (Expect.equal (canonicalize lowerBoundFlag Range.Inc lowerElement))
-                                    >> Maybe.withDefault (Expect.fail "Lower bound missing")
-                                , Range.upperElement
-                                    >> Maybe.map (Expect.equal (canonicalize upperBoundFlag Range.Exc upperElement))
-                                    >> Maybe.withDefault (Expect.fail "Upper bound missing")
-                                ]
-                                range
+                                else
+                                    Expect.all
+                                        [ expectedLowerBoundInclusive
+                                        , expectedUpperBoundExclusive
+                                        , upperElementExpectation upperElement
+                                        , lowerElementExpectation lowerElement
+                                        ]
+                                        range
+
+                            ( Nothing, Just upperElement ) ->
+                                Expect.all
+                                    [ expectedUpperBoundExclusive
+                                    , expectedLowerBoundExclusive
+                                    , upperElementExpectation upperElement
+                                    ]
+                                    range
+
+                            ( Just lowerElement, Nothing ) ->
+                                Expect.all
+                                    [ expectedUpperBoundExclusive
+                                    , expectedLowerBoundInclusive
+                                    , lowerElementExpectation lowerElement
+                                    ]
+                                    range
+
+                            ( Nothing, Nothing ) ->
+                                Expect.all
+                                    [ expectedLowerBoundExclusive
+                                    , expectedUpperBoundExclusive
+                                    ]
+                                    range
 
                     Err err ->
-                        case compare lowerElement upperElement of
-                            LT ->
-                                Expect.fail "Valid bounds"
-
-                            EQ ->
-                                Expect.fail "Valid bounds"
-
-                            GT ->
-                                Expect.equal err "Lower bound must be less than or equal to upper bound"
+                        -- This implies that the bounds are wrong which is checked elsewhere
+                        Expect.pass
         ]
+
+
+
+-- Type generic
 
 
 checkBounds : Test
