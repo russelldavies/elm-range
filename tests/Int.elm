@@ -1,11 +1,9 @@
 module Int exposing (canonical, checkBounds, equal, isEmpty)
 
 import Expect exposing (Expectation)
-import Fuzz exposing (Fuzzer, int, list, string)
-import Random
 import Range exposing (Range)
 import Range.Int
-import Shrink
+import Range.Int.Fuzz as Fuzz
 import Test exposing (..)
 
 
@@ -16,28 +14,11 @@ import Test exposing (..)
 canonical : Test
 canonical =
     describe "Verifies Int canonical function"
-        [ fuzz3 (Fuzz.maybe Fuzz.int) (Fuzz.maybe Fuzz.int) boundFlagFuzzer "Random bound values and flags" <|
-            \maybeLowerElement maybeUpperElement (( lowerBoundFlag, upperBoundFlag ) as boundFlags) ->
+        [ fuzz2 Fuzz.validMaybeIntPair Fuzz.boundFlagPair "Random bound values and flags" <|
+            \( maybeLowerElement, maybeUpperElement ) (( lowerBoundFlag, upperBoundFlag ) as boundFlags) ->
                 case Range.Int.create maybeLowerElement maybeUpperElement (Just boundFlags) of
                     Ok range ->
                         let
-                            canonicalize flag expectedFlag el =
-                                if flag == expectedFlag then
-                                    el
-
-                                else
-                                    el + 1
-
-                            upperElementExpectation upperElement =
-                                Range.upperElement
-                                    >> Maybe.map (Expect.equal (canonicalize upperBoundFlag Range.Exc upperElement))
-                                    >> Maybe.withDefault (Expect.fail "Upper bound missing")
-
-                            lowerElementExpectation lowerElement =
-                                Range.lowerElement
-                                    >> Maybe.map (Expect.equal (canonicalize lowerBoundFlag Range.Inc lowerElement))
-                                    >> Maybe.withDefault (Expect.fail "Lower bound missing")
-
                             bothInclusive =
                                 lowerBoundFlag == Range.Inc && upperBoundFlag == Range.Inc
 
@@ -56,8 +37,8 @@ canonical =
                                     Expect.all
                                         [ expectedLowerBoundInclusive
                                         , expectedUpperBoundExclusive
-                                        , upperElementExpectation upperElement
-                                        , lowerElementExpectation lowerElement
+                                        , upperElementExpectation upperElement upperBoundFlag
+                                        , lowerElementExpectation lowerElement lowerBoundFlag
                                         ]
                                         range
 
@@ -65,7 +46,7 @@ canonical =
                                 Expect.all
                                     [ expectedUpperBoundExclusive
                                     , expectedLowerBoundExclusive
-                                    , upperElementExpectation upperElement
+                                    , upperElementExpectation upperElement upperBoundFlag
                                     ]
                                     range
 
@@ -73,7 +54,7 @@ canonical =
                                 Expect.all
                                     [ expectedUpperBoundExclusive
                                     , expectedLowerBoundInclusive
-                                    , lowerElementExpectation lowerElement
+                                    , lowerElementExpectation lowerElement lowerBoundFlag
                                     ]
                                     range
 
@@ -85,8 +66,7 @@ canonical =
                                     range
 
                     Err err ->
-                        -- This implies that the bounds are wrong which is checked elsewhere
-                        Expect.pass
+                        Expect.fail err
         ]
 
 
@@ -96,32 +76,30 @@ canonical =
 
 checkBounds : Test
 checkBounds =
-    describe "Check range bounds"
-        [ fuzz2 Fuzz.int Fuzz.int "Lower must be less than or equal to upper" <|
-            \lower upper ->
-                case Range.Int.create (Just lower) (Just upper) Nothing of
-                    Ok range ->
-                        case compare lower upper of
-                            LT ->
-                                Expect.false "Expected range not to be empty" (Range.isEmpty range)
+    fuzz Fuzz.intPair "Check range bounds: lower must be less than or equal to upper" <|
+        \( lower, upper ) ->
+            case Range.Int.create (Just lower) (Just upper) Nothing of
+                Ok range ->
+                    case compare lower upper of
+                        LT ->
+                            Expect.false "Expected range not to be empty" (Range.isEmpty range)
 
-                            EQ ->
-                                Expect.true "Expected range to be empty" (Range.isEmpty range)
+                        EQ ->
+                            Expect.true "Expected range to be empty" (Range.isEmpty range)
 
-                            GT ->
-                                Expect.fail "Valid bounds"
+                        GT ->
+                            Expect.fail "Valid bounds"
 
-                    Err err ->
-                        case compare lower upper of
-                            LT ->
-                                Expect.fail "Valid bounds, should be a range"
+                Err err ->
+                    case compare lower upper of
+                        LT ->
+                            Expect.fail "Valid bounds, should be a range"
 
-                            EQ ->
-                                Expect.fail "Valid bounds, should be empty"
+                        EQ ->
+                            Expect.fail "Valid bounds, should be empty"
 
-                            GT ->
-                                Expect.equal err "Lower bound must be less than or equal to upper bound"
-        ]
+                        GT ->
+                            Expect.equal err "Lower bound must be less than or equal to upper bound"
 
 
 isEmpty : Test
@@ -239,74 +217,7 @@ equal =
                ]
            ]
 -}
-
-
-{-| Can be empty
--}
-randomRange : Fuzzer (Range Int)
-randomRange =
-    let
-        maybeInt =
-            Fuzz.oneOf
-                [ Fuzz.constant Nothing
-                , Fuzz.int |> Fuzz.map Just
-                ]
-
-        rangeFlag =
-            Fuzz.oneOf
-                [ Fuzz.constant Range.Inc
-                , Fuzz.constant Range.Exc
-                ]
-    in
-    Fuzz.map3
-        (\lowerBound upperBound flags ->
-            Range.Int.create lowerBound upperBound (Just flags)
-                |> Result.withDefault Range.empty
-        )
-        maybeInt
-        maybeInt
-        (Fuzz.tuple ( rangeFlag, rangeFlag ))
-
-
-nonEmptyRange : Fuzzer (Range Int)
-nonEmptyRange =
-    let
-        maybeInt =
-            Fuzz.oneOf
-                [ Fuzz.constant Nothing
-                , Fuzz.int |> Fuzz.map Just
-                ]
-
-        rangeFlag =
-            Fuzz.oneOf
-                [ Fuzz.constant Range.Inc
-                , Fuzz.constant Range.Exc
-                ]
-    in
-    Fuzz.map3
-        (\lowerBound upperBound flags ->
-            Range.Int.create lowerBound upperBound (Just flags)
-                |> Result.withDefault Range.empty
-        )
-        maybeInt
-        maybeInt
-        (Fuzz.tuple ( rangeFlag, rangeFlag ))
-
-
-
 -- HELPERS
-
-
-boundFlagFuzzer : Fuzzer ( Range.BoundFlag, Range.BoundFlag )
-boundFlagFuzzer =
-    let
-        generator =
-            Random.uniform Range.Inc [ Range.Exc ]
-
-        fuzzer =
-            Fuzz.custom generator Shrink.noShrink
-    in
-    Fuzz.tuple ( fuzzer, fuzzer )
 
 
 expectedLowerBoundInclusive : Range subtype -> Expectation
@@ -329,24 +240,24 @@ expectedUpperBoundExclusive =
     Expect.false "Expected upper bound exclusive" << Range.upperBoundInclusive
 
 
-stringFuncs : Test
-stringFuncs =
-    describe "string parsing"
-        [ fuzz rangeStringer "restores the original string if you run it again" <|
-            \rangeStr ->
-                rangeStr
-                    |> Range.Int.fromString
-                    |> Result.withDefault Range.empty
-                    |> Range.Int.toString
-                    |> Expect.equal rangeStr
-        ]
+upperElementExpectation : Int -> Range.BoundFlag -> Range Int -> Expectation
+upperElementExpectation element boundFlag =
+    Range.upperElement
+        >> Maybe.map (Expect.equal (canonicalize boundFlag Range.Exc element))
+        >> Maybe.withDefault (Expect.fail "Upper bound missing")
 
 
-rangeStringer : Fuzzer String
-rangeStringer =
-    Fuzz.map2
-        (\lowerBound upperBound ->
-            "[" ++ lowerBound ++ "," ++ upperBound ++ ")"
-        )
-        (Fuzz.int |> Fuzz.map String.fromInt)
-        (Fuzz.int |> Fuzz.map String.fromInt)
+lowerElementExpectation : Int -> Range.BoundFlag -> Range Int -> Expectation
+lowerElementExpectation element boundFlag =
+    Range.lowerElement
+        >> Maybe.map (Expect.equal (canonicalize boundFlag Range.Inc element))
+        >> Maybe.withDefault (Expect.fail "Lower bound missing")
+
+
+canonicalize : Range.BoundFlag -> Range.BoundFlag -> Int -> Int
+canonicalize flag expectedFlag el =
+    if flag == expectedFlag then
+        el
+
+    else
+        el + 1
