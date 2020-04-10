@@ -110,3 +110,12 @@ boundFlagCharPair =
             , Fuzz.constant ')'
             ]
         )
+
+
+rangeString : Fuzzer String
+rangeString =
+    Fuzz.map
+        (\( lowerBound, upperBound ) ->
+            "[" ++ String.fromInt lowerBound ++ "," ++ String.fromInt upperBound ++ ")"
+        )
+        validIntPair
