@@ -199,9 +199,9 @@ equal =
                     Range.Int.equal range range
                         |> Expect.true "both filled should be true with same values"
                 )
-            , fuzz2 IntFuzz.validMaybeIntPair IntFuzz.validMaybeIntPair "different values" <|
-                \( l1, u1 ) ( l2, u2 ) ->
-                    case ( Range.Int.create l1 u1 Nothing, Range.Int.create l2 u2 Nothing ) of
+            , fuzz2 IntFuzz.range IntFuzz.range "different values" <|
+                \result1 result2 ->
+                    case ( result1, result2 ) of
                         ( Ok r1, Ok r2 ) ->
                             Range.Int.equal r1 r2
                                 |> Expect.false "both filled with different values should be false"

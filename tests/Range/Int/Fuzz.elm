@@ -7,6 +7,15 @@ import Range.Int
 import Shrink
 
 
+range : Fuzzer (Result String (Range Int))
+range =
+    Fuzz.map
+        (\( lowerBound, upperBound ) ->
+            Range.Int.create lowerBound upperBound Nothing
+        )
+        validMaybeIntPair
+
+
 {-| Lower may be greater than upper
 -}
 intPair : Fuzzer ( Int, Int )
