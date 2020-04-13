@@ -358,12 +358,15 @@ encode subtypeConfig =
 validate : SubtypeConfig subtype -> Range subtype -> Result String (Range subtype)
 validate { canonical, compare } range_ =
     let
+        boundErr =
+            Err "Lower bound must be less than or equal to upper bound"
+
         checkBounds range =
             case Maybe.map2 compare (lowerElement range) (upperElement range) of
                 Just order ->
                     case order of
                         GT ->
-                            Err "Lower bound must be less than or equal to upper bound"
+                            boundErr
 
                         EQ ->
                             -- Edge case: if bounds are equal, and both exclusive, range is empty
@@ -390,7 +393,7 @@ validate { canonical, compare } range_ =
                             Ok Empty
 
                         GT ->
-                            Err "Lower bound must be less than or equal to upper bound"
+                            boundErr
 
                 Nothing ->
                     Ok range
