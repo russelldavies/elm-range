@@ -135,8 +135,14 @@ equal { compare } r1 r2 =
             True
 
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
-            (compareLowerBounds compare lower1 lower2 |> (==) EQ)
-                && (compareUpperBounds compare upper1 upper2 |> (==) EQ)
+            let
+                lowerBoundOrder =
+                    compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound )
+
+                upperBoundOrder =
+                    compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound )
+            in
+            lowerBoundOrder == EQ && upperBoundOrder == EQ
 
         _ ->
             False
@@ -657,24 +663,6 @@ compareBounds compare ( bound1, bound1Type ) ( bound2, bound2Type ) =
             compare bound1Val bound2Val
 
 
-compareLowerBounds :
-    (subtype -> subtype -> Order)
-    -> Bound subtype
-    -> Bound subtype
-    -> Order
-compareLowerBounds compare bound1 bound2 =
-    compareBounds compare ( bound1, LowerBound ) ( bound2, LowerBound )
-
-
-compareUpperBounds :
-    (subtype -> subtype -> Order)
-    -> Bound subtype
-    -> Bound subtype
-    -> Order
-compareUpperBounds compare bound1 bound2 =
-    compareBounds compare ( bound1, UpperBound ) ( bound2, UpperBound )
-
-
 min : (subtype -> subtype -> Order) -> subtype -> subtype -> subtype
 min compare x y =
     if lt compare x y then
@@ -691,3 +679,30 @@ max compare x y =
 
     else
         y
+
+
+rangeCompare : SubtypeConfig subtype -> Range subtype -> Range subtype -> Order
+rangeCompare { compare } r1 r2 =
+    case ( r1, r2 ) of
+        ( Empty, Empty ) ->
+            EQ
+
+        ( Empty, _ ) ->
+            LT
+
+        ( _, Empty ) ->
+            GT
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            let
+                lowerBoundOrder =
+                    compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound )
+
+                upperBoundOrder =
+                    compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound )
+            in
+            if lowerBoundOrder == EQ then
+                upperBoundOrder
+
+            else
+                lowerBoundOrder
