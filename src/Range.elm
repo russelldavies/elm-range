@@ -546,8 +546,8 @@ gte compare a b =
 
 {-| Compare two bounds.
 
-The bounds can be any combination of upper and lower which makes this a useful
-helper function.
+The bounds can be any combination of upper and lower; so it's useful for a
+variety of operators.
 
 The simple case is when both bounds are finite and inclusive, the result is a
 simple comparison of their values.
@@ -578,10 +578,13 @@ compareBounds compare ( bound1, bound1Type ) ( bound2, bound2Type ) =
                 ( LowerBound, LowerBound ) ->
                     EQ
 
-                ( LowerBound, _ ) ->
+                ( UpperBound, UpperBound ) ->
+                    EQ
+
+                ( LowerBound, UpperBound ) ->
                     LT
 
-                _ ->
+                ( UpperBound, LowerBound ) ->
                     GT
 
         ( Infinite, _ ) ->
@@ -592,44 +595,63 @@ compareBounds compare ( bound1, bound1Type ) ( bound2, bound2Type ) =
                 GT
 
         ( _, Infinite ) ->
-            if bound2Type == LowerBound then
-                GT
+            if bound2Type == UpperBound then
+                LT
 
             else
-                LT
+                GT
 
         ( Exclusive bound1Val, Exclusive bound2Val ) ->
-            if compare bound1Val bound2Val == EQ then
-                EQ
+            let
+                order =
+                    compare bound1Val bound2Val
+            in
+            if order == EQ then
+                case ( bound1Type, bound2Type ) of
+                    ( LowerBound, LowerBound ) ->
+                        EQ
 
-            else if bound1Type == LowerBound && bound2Type == LowerBound then
-                EQ
+                    ( UpperBound, UpperBound ) ->
+                        EQ
 
-            else if bound1Type == LowerBound then
-                GT
+                    ( LowerBound, UpperBound ) ->
+                        GT
+
+                    ( UpperBound, LowerBound ) ->
+                        LT
 
             else
-                LT
+                order
 
         ( Exclusive bound1Val, Inclusive bound2Val ) ->
-            if compare bound1Val bound2Val == EQ then
-                EQ
+            let
+                order =
+                    compare bound1Val bound2Val
+            in
+            if order == EQ then
+                if bound1Type == LowerBound then
+                    GT
 
-            else if bound1Type == LowerBound then
-                GT
+                else
+                    LT
 
             else
-                LT
+                order
 
         ( Inclusive bound1Val, Exclusive bound2Val ) ->
-            if compare bound1Val bound2Val == EQ then
-                EQ
+            let
+                order =
+                    compare bound1Val bound2Val
+            in
+            if order == EQ then
+                if bound2Type == LowerBound then
+                    LT
 
-            else if bound2Type == LowerBound then
-                LT
+                else
+                    GT
 
             else
-                GT
+                order
 
         ( Inclusive bound1Val, Inclusive bound2Val ) ->
             compare bound1Val bound2Val
