@@ -6,6 +6,7 @@ module Range.Int exposing
     , encode
     , equal
     , fromString
+    , lessThan
     , merge
     , toString
     )
@@ -48,6 +49,11 @@ containsElement =
 equal : Range Int -> Range Int -> Bool
 equal =
     Range.equal config
+
+
+lessThan : Range Int -> Range Int -> Bool
+lessThan =
+    Range.lessThan config
 
 
 merge : Range Int -> Range Int -> Range Int

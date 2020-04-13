@@ -4,6 +4,7 @@ module Int exposing
     , equal
     , fromString
     , isEmpty
+    , lessThan
     , toString
     )
 
@@ -31,7 +32,7 @@ canonical =
 
 
 
--- Type generic
+-- CREATION
 
 
 checkBounds : Test
@@ -135,6 +136,147 @@ toString =
         ]
 
 
+
+-- OPERATIONS
+
+
+equal : Test
+equal =
+    describe "equal"
+        [ test "both empty" <|
+            \_ ->
+                Range.Int.equal Range.empty Range.empty
+                    |> Expect.true "Both empty should be true"
+        , describe "one empty"
+            [ fuzzRange "first empty"
+                (Range.Int.equal Range.empty
+                    >> Expect.false "Empty and non-empty should be false"
+                )
+            , fuzzRange "second empty"
+                (flip Range.Int.equal Range.empty
+                    >> Expect.false "Empty and non-empty should be false"
+                )
+            ]
+        , describe "both filled"
+            [ fuzzRange "same range" <|
+                \range ->
+                    Range.Int.equal range range
+                        |> Expect.true "Same range should be equal"
+            , fuzz2 IntFuzz.range IntFuzz.range "different values" <|
+                \range1 range2 ->
+                    Range.Int.equal range1 range2
+                        |> Expect.false "both filled with different values should be false"
+            ]
+        ]
+
+
+lessThan : Test
+lessThan =
+    let
+        create l u =
+            Range.Int.create l u Nothing |> Result.withDefault Range.empty
+    in
+    describe "lessThan"
+        [ test "both empty" <|
+            \_ ->
+                Range.Int.lessThan Range.empty Range.empty
+                    |> Expect.false "If both empty then should be false"
+        , describe "one empty"
+            [ fuzzRange "first empty"
+                (Range.Int.lessThan Range.empty
+                    >> Expect.true "Empty is always less than a bounded range"
+                )
+            , fuzzRange "second empty"
+                (flip Range.Int.lessThan Range.empty
+                    >> Expect.false "Empty is never less than a bounded range"
+                )
+            ]
+        , describe "both bounded"
+            [ fuzzRange "same range" <|
+                \range ->
+                    Range.Int.lessThan range range
+                        |> Expect.false "A range is not less than itself"
+            , describe "both bounds finite"
+                [ test "Lower less and upper equal" <|
+                    \_ ->
+                        Range.Int.lessThan
+                            (create (Just 1) (Just 5))
+                            (create (Just 2) (Just 5))
+                            |> Expect.true "[1,5) < [2,5)"
+                , test "Lower less and upper less" <|
+                    \_ ->
+                        Range.Int.lessThan
+                            (create (Just 1) (Just 4))
+                            (create (Just 2) (Just 5))
+                            |> Expect.true "[1,4) < [2,5)"
+                , test "Lower less and upper more" <|
+                    \_ ->
+                        Range.Int.lessThan
+                            (create (Just 1) (Just 5))
+                            (create (Just 2) (Just 4))
+                            |> Expect.true "[1,5) < [2,4)"
+                , test "Lower equal and upper less" <|
+                    \_ ->
+                        Range.Int.lessThan
+                            (create (Just 1) (Just 4))
+                            (create (Just 1) (Just 5))
+                            |> Expect.true "[1,4) < [1,5)"
+                , test "Lower equal and upper more" <|
+                    \_ ->
+                        Range.Int.lessThan
+                            (create (Just 1) (Just 5))
+                            (create (Just 1) (Just 4))
+                            |> Expect.false "[1,5) not < [1,4)"
+                , test "Lower more and upper equal" <|
+                    \_ ->
+                        Range.Int.lessThan
+                            (create (Just 2) (Just 5))
+                            (create (Just 1) (Just 5))
+                            |> Expect.false "[2,5) not < [1,5)"
+                , test "Lower more and upper less" <|
+                    \_ ->
+                        Range.Int.lessThan
+                            (create (Just 2) (Just 4))
+                            (create (Just 1) (Just 5))
+                            |> Expect.false "[2,4) not < [1,5)"
+                , test "Lower more and upper more" <|
+                    \_ ->
+                        Range.Int.lessThan
+                            (create (Just 2) (Just 5))
+                            (create (Just 1) (Just 4))
+                            |> Expect.false "[2,5) not < [1,4)"
+                ]
+            , describe "infinite and finite bounds"
+                [ fuzz2 Fuzz.int IntFuzz.rangeFinite "Infinite lower" <|
+                    \i range ->
+                        Range.Int.lessThan
+                            (create Nothing (Just i))
+                            range
+                            |> Expect.true "Should be less than any finite range"
+                , fuzz IntFuzz.rangeFinite "Infinite upper" <|
+                    \range ->
+                        Range.Int.lessThan
+                            (create (Range.lowerElement range) Nothing)
+                            range
+                            |> Expect.false "Should be greater than any finite range"
+                ]
+            ]
+        ]
+
+
+flip : (a -> b -> c) -> b -> a -> c
+flip fn b a =
+    fn a b
+
+
+fuzzRange desc fn =
+    fuzz IntFuzz.range desc fn
+
+
+
+-- Functions
+
+
 isEmpty : Test
 isEmpty =
     let
@@ -166,100 +308,7 @@ isEmpty =
         ]
 
 
-equal : Test
-equal =
-    let
-        fuzzSingleRange desc expectation =
-            fuzz IntFuzz.validMaybeIntPair desc <|
-                \( maybeLowerElement, maybeUpperElement ) ->
-                    Range.Int.create maybeLowerElement maybeUpperElement Nothing
-                        |> Result.map expectation
-                        |> resultFailErr
-    in
-    describe "equal"
-        [ test "both empty" <|
-            \_ ->
-                Range.Int.equal Range.empty Range.empty
-                    |> Expect.true "Both empty should be true"
-        , describe "one empty"
-            [ fuzzSingleRange "first empty"
-                (\range ->
-                    Range.Int.equal Range.empty range
-                        |> Expect.false "Empty and non-empty should be false"
-                )
-            , fuzzSingleRange "second empty"
-                (\range ->
-                    Range.Int.equal range Range.empty
-                        |> Expect.false "Empty and non-empty should be false"
-                )
-            ]
-        , describe "both filled"
-            [ fuzzSingleRange "same values"
-                (\range ->
-                    Range.Int.equal range range
-                        |> Expect.true "both filled should be true with same values"
-                )
-            , fuzz2 IntFuzz.range IntFuzz.range "different values" <|
-                \result1 result2 ->
-                    case ( result1, result2 ) of
-                        ( Ok r1, Ok r2 ) ->
-                            Range.Int.equal r1 r2
-                                |> Expect.false "both filled with different values should be false"
 
-                        ( Err err, _ ) ->
-                            Expect.fail err
-
-                        ( _, Err err ) ->
-                            Expect.fail err
-            ]
-        ]
-
-
-
-{-
-   lessThan : Test
-   lessThan =
-       let
-           r1 =
-               create (Just 1) (Just 2)
-
-           r2 =
-               Range.Int.create (Just 2) (Just 3) Nothing
-                   |> Result.withDefault Range.empty
-       in
-       describe "lessThan"
-           [ test "both empty" <|
-               \_ ->
-                   Range.Int.lessThan Range.empty Range.empty
-                       |> Expect.false "Both empty should be false"
-           , describe "one empty"
-               [ fuzz nonEmptyRange "first empty" <|
-                   \range ->
-                       Range.Int.lessThan Range.empty range
-                           |> Expect.true "Empty should always be less"
-               , test "second empty" <|
-                   \_ ->
-                       Range.Int.lessThan r1 Range.empty
-                           |> Expect.false "Bounded and empty should be false"
-               ]
-           , describe "both filled"
-               [ test "same values" <|
-                   \_ ->
-                       Range.Int.lessThan r1 r1
-                           |> Expect.false "the same so not true"
-               , test "lower bound less, upper bound greater" <|
-                   \_ ->
-                       Range.Int.lessThan r1 r2
-                           |> Expect.true "should be true"
-               , test "lower bounds equal, upper bound greater" <|
-                   \_ ->
-                       Range.Int.lessThan
-                           (create (Just 1) (Just 2))
-                           (create (Just 1) (Just 5))
-                           |> Expect.true "should be true"
-               ]
-           ]
--}
 -- HELPERS
 
 

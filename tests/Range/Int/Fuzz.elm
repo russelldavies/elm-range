@@ -7,13 +7,26 @@ import Range.Int
 import Shrink
 
 
-range : Fuzzer (Result String (Range Int))
+{-| Is not empty
+-}
+range : Fuzzer (Range Int)
 range =
     Fuzz.map
         (\( lowerBound, upperBound ) ->
             Range.Int.create lowerBound upperBound Nothing
+                |> Result.withDefault Range.empty
         )
         validMaybeIntPair
+
+
+rangeFinite : Fuzzer (Range Int)
+rangeFinite =
+    Fuzz.map
+        (\( lowerBound, upperBound ) ->
+            Range.Int.create (Just lowerBound) (Just upperBound) Nothing
+                |> Result.withDefault Range.empty
+        )
+        validIntPair
 
 
 {-| Lower may be greater than upper
@@ -43,15 +56,15 @@ validIntPair : Fuzzer ( Int, Int )
 validIntPair =
     let
         generator =
-            Random.int Random.minInt Random.maxInt
+            Random.int Random.minInt (Random.maxInt - 1)
                 |> Random.andThen
                     (\i ->
                         Random.pair
                             (Random.constant i)
-                            (Random.int i Random.maxInt)
+                            (Random.int (i + 1) Random.maxInt)
                     )
     in
-    Fuzz.custom generator (Shrink.tuple ( Shrink.int, Shrink.int ))
+    Fuzz.custom generator (Shrink.tuple ( Shrink.noShrink, Shrink.noShrink ))
 
 
 {-| Lower must be less than or equal to upper
@@ -70,14 +83,14 @@ validMaybeIntPair =
                             Random.constant Nothing
 
                         else
-                            randJust <| Random.int Random.minInt Random.maxInt
+                            randJust <| Random.int Random.minInt (Random.maxInt - 1)
                     )
                 |> Random.andThen
                     (Maybe.map
                         (\i ->
                             Random.pair
                                 (randJust <| Random.constant i)
-                                (randJust <| Random.int i Random.maxInt)
+                                (randJust <| Random.int (i + 1) Random.maxInt)
                         )
                         >> Maybe.withDefault
                             (Random.pair
@@ -88,8 +101,8 @@ validMaybeIntPair =
     in
     Fuzz.custom generator
         (Shrink.tuple
-            ( Shrink.maybe Shrink.int
-            , Shrink.maybe Shrink.int
+            ( Shrink.maybe Shrink.noShrink
+            , Shrink.maybe Shrink.noShrink
             )
         )
 

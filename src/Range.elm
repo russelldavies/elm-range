@@ -11,6 +11,7 @@ module Range exposing
     , equal
     , fromString
     , isEmpty
+    , lessThan
     , lowerBoundInclusive
     , lowerBoundInfinite
     , lowerElement
@@ -148,20 +149,9 @@ equal { compare } r1 r2 =
             False
 
 
-lessThan : SubtypeConfig subtype -> Range subtype -> Range subtype -> Order
-lessThan { compare } r1 r2 =
-    case ( isEmpty r1, isEmpty r2 ) of
-        ( True, True ) ->
-            EQ
-
-        ( True, False ) ->
-            LT
-
-        ( False, True ) ->
-            GT
-
-        ( False, False ) ->
-            EQ
+lessThan : SubtypeConfig subtype -> Range subtype -> Range subtype -> Bool
+lessThan config r1 r2 =
+    rangeCompare config r1 r2 == LT
 
 
 containsRange : SubtypeConfig subtype -> Range subtype -> Range subtype -> Bool
