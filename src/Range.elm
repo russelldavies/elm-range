@@ -130,23 +130,8 @@ toString subtypeConfig range =
 
 
 equal : SubtypeConfig subtype -> Range subtype -> Range subtype -> Bool
-equal { compare } r1 r2 =
-    case ( r1, r2 ) of
-        ( Empty, Empty ) ->
-            True
-
-        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
-            let
-                lowerBoundOrder =
-                    compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound )
-
-                upperBoundOrder =
-                    compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound )
-            in
-            lowerBoundOrder == EQ && upperBoundOrder == EQ
-
-        _ ->
-            False
+equal config r1 r2 =
+    rangeCompare config r1 r2 == EQ
 
 
 lessThan : SubtypeConfig subtype -> Range subtype -> Range subtype -> Bool
