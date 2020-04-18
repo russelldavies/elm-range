@@ -1,9 +1,9 @@
 module Range exposing
     ( BoundFlag(..)
+    , Config
     , Range
-    , SubtypeConfig
     , containsElement
-    , containsRange
+    , containsRangeInternal
     , create
     , decoder
     , empty
@@ -16,6 +16,7 @@ module Range exposing
     , lowerBoundInfinite
     , lowerElement
     , merge
+    , serialize
     , toString
     , upperBoundInclusive
     , upperBoundInfinite
@@ -31,7 +32,13 @@ import Parser exposing ((|.), (|=), Parser)
 -- MODELS
 
 
-type Range subtype
+type alias Range subtype =
+    { config : Config subtype
+    , range : RangeInternal subtype
+    }
+
+
+type RangeInternal subtype
     = Bounded ( Bound subtype, Bound subtype )
     | Empty
 
@@ -42,11 +49,11 @@ type Bound subtype
     | Infinite
 
 
-type alias SubtypeConfig subtype =
+type alias Config subtype =
     { toString : subtype -> String
     , fromString : String -> Result String subtype
     , compare : subtype -> subtype -> Order
-    , canonical : Maybe (Range subtype -> ( ( Maybe subtype, Maybe subtype ), ( BoundFlag, BoundFlag ) ))
+    , canonical : Maybe (RangeInternal subtype -> ( ( Maybe subtype, Maybe subtype ), ( BoundFlag, BoundFlag ) ))
     }
 
 
@@ -64,33 +71,38 @@ type BoundType
 -- CREATE
 
 
-empty : Range subtype
-empty =
-    Empty
+empty : Config subtype -> Range subtype
+empty config =
+    Range config Empty
 
 
 create :
-    SubtypeConfig subtype
+    Config subtype
     -> Maybe subtype
     -> Maybe subtype
     -> ( BoundFlag, BoundFlag )
     -> Result String (Range subtype)
-create subtypeConfig maybeLower maybeUpper flags =
+create config maybeLower maybeUpper flags =
     -- Flags are mandatory as it will be the subtype's canonical function that
     -- specifies the convention to use.
-    construct ( ( maybeLower, maybeUpper ), flags ) |> validate subtypeConfig
+    {-
+       construct maybeLower maybeUpper flags
+           |> validate config
+           |> Result.map (Range config)
+    -}
+    Ok <| Range config Empty
 
 
 fromString :
-    SubtypeConfig subtype
+    Config subtype
     -> String
-    -> Result (List Parser.DeadEnd) (Range subtype)
-fromString subtypeConfig =
-    Parser.run (parser subtypeConfig)
+    -> Result (List Parser.DeadEnd) (RangeInternal subtype)
+fromString config =
+    Parser.run (parser config)
 
 
-toString : SubtypeConfig subtype -> Range subtype -> String
-toString subtypeConfig range =
+toString : Config subtype -> RangeInternal subtype -> String
+toString config range =
     case range of
         Empty ->
             "empty"
@@ -98,28 +110,28 @@ toString subtypeConfig range =
         Bounded bounds ->
             case bounds of
                 ( Inclusive lower, Inclusive upper ) ->
-                    "[" ++ subtypeConfig.toString lower ++ "," ++ subtypeConfig.toString upper ++ "]"
+                    "[" ++ config.toString lower ++ "," ++ config.toString upper ++ "]"
 
                 ( Exclusive lower, Inclusive upper ) ->
-                    "(" ++ subtypeConfig.toString lower ++ "," ++ subtypeConfig.toString upper ++ "]"
+                    "(" ++ config.toString lower ++ "," ++ config.toString upper ++ "]"
 
                 ( Inclusive lower, Exclusive upper ) ->
-                    "[" ++ subtypeConfig.toString lower ++ "," ++ subtypeConfig.toString upper ++ ")"
+                    "[" ++ config.toString lower ++ "," ++ config.toString upper ++ ")"
 
                 ( Exclusive lower, Exclusive upper ) ->
-                    "(" ++ subtypeConfig.toString lower ++ "," ++ subtypeConfig.toString upper ++ ")"
+                    "(" ++ config.toString lower ++ "," ++ config.toString upper ++ ")"
 
                 ( Infinite, Inclusive upper ) ->
-                    "(," ++ subtypeConfig.toString upper ++ "]"
+                    "(," ++ config.toString upper ++ "]"
 
                 ( Infinite, Exclusive upper ) ->
-                    "(," ++ subtypeConfig.toString upper ++ ")"
+                    "(," ++ config.toString upper ++ ")"
 
                 ( Inclusive lower, Infinite ) ->
-                    "[" ++ subtypeConfig.toString lower ++ ",)"
+                    "[" ++ config.toString lower ++ ",)"
 
                 ( Exclusive lower, Infinite ) ->
-                    "(" ++ subtypeConfig.toString lower ++ ",)"
+                    "(" ++ config.toString lower ++ ",)"
 
                 ( Infinite, Infinite ) ->
                     "(,)"
@@ -129,27 +141,27 @@ toString subtypeConfig range =
 -- OPERATIONS
 
 
-equal : SubtypeConfig subtype -> Range subtype -> Range subtype -> Bool
+equal : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
 equal config r1 r2 =
-    rangeCompare config r1 r2 == EQ
+    r1 == r2
 
 
-lessThan : SubtypeConfig subtype -> Range subtype -> Range subtype -> Bool
+lessThan : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
 lessThan config r1 r2 =
     rangeCompare config r1 r2 == LT
 
 
-containsRange : SubtypeConfig subtype -> Range subtype -> Range subtype -> Bool
-containsRange ({ compare } as config) outerRange innerRange =
+containsRangeInternal : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
+containsRangeInternal ({ compare } as config) outerRangeInternal innerRangeInternal =
     let
         comp el =
-            Maybe.map (containsElement config outerRange) (el innerRange)
+            Maybe.map (containsElement config outerRangeInternal) (el innerRangeInternal)
                 |> Maybe.withDefault False
     in
     comp lowerElement && comp upperElement
 
 
-containsElement : SubtypeConfig subtype -> Range subtype -> subtype -> Bool
+containsElement : Config subtype -> RangeInternal subtype -> subtype -> Bool
 containsElement { compare } range element =
     let
         lt_ =
@@ -202,7 +214,7 @@ containsElement { compare } range element =
 -- FUNCTIONS
 
 
-lowerElement : Range subtype -> Maybe subtype
+lowerElement : RangeInternal subtype -> Maybe subtype
 lowerElement range =
     case range of
         Bounded ( lower, _ ) ->
@@ -212,7 +224,7 @@ lowerElement range =
             Nothing
 
 
-upperElement : Range subtype -> Maybe subtype
+upperElement : RangeInternal subtype -> Maybe subtype
 upperElement range =
     case range of
         Bounded ( _, upper ) ->
@@ -222,7 +234,7 @@ upperElement range =
             Nothing
 
 
-isEmpty : Range subtype -> Bool
+isEmpty : RangeInternal subtype -> Bool
 isEmpty range =
     case range of
         Bounded _ ->
@@ -232,7 +244,7 @@ isEmpty range =
             True
 
 
-lowerBoundInclusive : Range subtype -> Bool
+lowerBoundInclusive : RangeInternal subtype -> Bool
 lowerBoundInclusive range =
     case range of
         Bounded ( Inclusive _, _ ) ->
@@ -242,7 +254,7 @@ lowerBoundInclusive range =
             False
 
 
-upperBoundInclusive : Range subtype -> Bool
+upperBoundInclusive : RangeInternal subtype -> Bool
 upperBoundInclusive range =
     case range of
         Bounded ( _, Inclusive _ ) ->
@@ -252,7 +264,7 @@ upperBoundInclusive range =
             False
 
 
-lowerBoundInfinite : Range subtype -> Bool
+lowerBoundInfinite : RangeInternal subtype -> Bool
 lowerBoundInfinite range =
     case range of
         Bounded ( Infinite, _ ) ->
@@ -262,7 +274,7 @@ lowerBoundInfinite range =
             False
 
 
-upperBoundInfinite : Range subtype -> Bool
+upperBoundInfinite : RangeInternal subtype -> Bool
 upperBoundInfinite range =
     case range of
         Bounded ( _, Infinite ) ->
@@ -272,7 +284,7 @@ upperBoundInfinite range =
             False
 
 
-merge : SubtypeConfig subtype -> Range subtype -> Range subtype -> Range subtype
+merge : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> RangeInternal subtype
 merge { compare } range1 range2 =
     case ( range1, range2 ) of
         ( Empty, Empty ) ->
@@ -307,16 +319,16 @@ merge { compare } range1 range2 =
 -- JSON
 
 
-{-| Range JSON decoder
+{-| RangeInternal JSON decoder
 -}
 decoder :
-    SubtypeConfig subtype
-    -> Decode.Decoder (Range subtype)
-decoder subtypeConfig =
+    Config subtype
+    -> Decode.Decoder (RangeInternal subtype)
+decoder config =
     Decode.string
         |> Decode.andThen
             (\rangeStr ->
-                case fromString subtypeConfig rangeStr of
+                case fromString config rangeStr of
                     Ok range ->
                         Decode.succeed range
 
@@ -325,83 +337,128 @@ decoder subtypeConfig =
             )
 
 
-{-| Encode Range to JSON
+{-| Encode RangeInternal to JSON
 -}
-encode : SubtypeConfig subtype -> Range subtype -> Encode.Value
-encode subtypeConfig =
-    toString subtypeConfig >> Encode.string
+encode : Config subtype -> RangeInternal subtype -> Encode.Value
+encode config =
+    toString config >> Encode.string
 
 
 
 -- HELPERS
 
 
-validate : SubtypeConfig subtype -> Range subtype -> Result String (Range subtype)
-validate { canonical, compare } range_ =
+{-| Construct a range value from bounds and range flags
+
+This does not force canonicalization of the range value. In most cases,
+external callers should only be canonicalization functions. Note that we
+perform some datatype-independent canonicalization checks anyway.
+
+-}
+serialize :
+    (subtype -> subtype -> Order)
+    -> Maybe ( ( BoundFlag, subtype -> subtype ), ( BoundFlag, subtype -> subtype ) )
+    -> Maybe subtype
+    -> Maybe subtype
+    -> ( BoundFlag, BoundFlag )
+    -> Result String (RangeInternal subtype)
+serialize compare maybeCanonical maybeLower maybeUpper ( lowerFlag, upperFlag ) =
     let
-        boundErr =
-            Err "Lower bound must be less than or equal to upper bound"
+        canonical =
+            Maybe.withDefault ( ( lowerFlag, identity ), ( upperFlag, identity ) ) maybeCanonical
 
-        checkBounds range =
-            case Maybe.map2 compare (lowerElement range) (upperElement range) of
-                Just order ->
-                    case order of
-                        GT ->
-                            boundErr
+        lowerBound =
+            maybeLower
+                |> Maybe.map (canonicalize (Tuple.first canonical) lowerFlag)
+                |> Maybe.withDefault Infinite
 
-                        EQ ->
-                            -- Edge case: if bounds are equal, and both exclusive, range is empty
-                            if not (lowerBoundInclusive range || upperBoundInclusive range) then
-                                Ok Empty
+        upperBound =
+            maybeUpper
+                |> Maybe.map (canonicalize (Tuple.second canonical) upperFlag)
+                |> Maybe.withDefault Infinite
 
-                            else
-                                range |> canonicalize |> normalize
-
-                        _ ->
-                            range |> canonicalize |> normalize
-
-                Nothing ->
-                    range |> canonicalize |> normalize
-
-        normalize range =
-            case Maybe.map2 compare (lowerElement range) (upperElement range) of
-                Just order ->
-                    case order of
-                        LT ->
-                            Ok range
-
-                        EQ ->
-                            Ok Empty
-
-                        GT ->
-                            boundErr
-
-                Nothing ->
-                    Ok range
-
-        canonicalize range =
-            case canonical of
-                Nothing ->
-                    range
-
-                Just fn ->
-                    construct (fn range)
+        boundedRange =
+            Bounded ( lowerBound, upperBound )
     in
-    range_
-        |> checkBounds
+    case Maybe.map2 compare maybeLower maybeUpper of
+        Just GT ->
+            Err "Range lower bound must be less than or equal to range upper bound"
+
+        Just EQ ->
+            if not (lowerFlag == Inc && upperFlag == Inc) then
+                Ok Empty
+
+            else
+                Ok boundedRange
+
+        Just LT ->
+            Ok boundedRange
+
+        Nothing ->
+            Ok boundedRange
 
 
-construct : ( ( Maybe subtype, Maybe subtype ), ( BoundFlag, BoundFlag ) ) -> Range subtype
-construct ( ( maybeLower, maybeUpper ), ( lowerFlag, upperFlag ) ) =
+canonicalize ( canonicalFlag, step ) specifiedFlag val =
     let
-        flagToBound flag =
-            case flag of
-                Inc ->
-                    Inclusive
+        steppedVal =
+            if specifiedFlag == canonicalFlag then
+                val
 
-                Exc ->
-                    Exclusive
+            else
+                step val
+    in
+    flagToBound canonicalFlag <| steppedVal
 
+
+flagToBound : BoundFlag -> (subtype -> Bound subtype)
+flagToBound flag =
+    case flag of
+        Inc ->
+            Inclusive
+
+        Exc ->
+            Exclusive
+
+
+boundToValFlag bound =
+    case bound of
+        Exclusive val ->
+            ( Just val, Exc )
+
+        Inclusive val ->
+            ( Just val, Inc )
+
+        Infinite ->
+            ( Nothing, Exc )
+
+
+deserialize : RangeInternal subtype -> ( Maybe subtype, Maybe subtype, ( BoundFlag, BoundFlag ) )
+deserialize range =
+    case range of
+        Empty ->
+            ( Nothing, Nothing, ( Exc, Exc ) )
+
+        Bounded ( lowerBound, upperBound ) ->
+            let
+                ( lowerVal, lowerFlag ) =
+                    boundToValFlag lowerBound
+
+                ( upperVal, upperFlag ) =
+                    boundToValFlag upperBound
+            in
+            ( lowerVal, upperVal, ( lowerFlag, upperFlag ) )
+
+
+{-| Construct a range from bounds
+
+This does not force canonicalization of the range value. In most cases,
+external callers should only be canonicalization functions. Note that we
+perform some datatype-independent canonicalization checks anyway.
+
+-}
+construct : Maybe subtype -> Maybe subtype -> ( BoundFlag, BoundFlag ) -> RangeInternal subtype
+construct maybeLower maybeUpper ( lowerFlag, upperFlag ) =
+    let
         lower =
             maybeLower
                 |> Maybe.map (flagToBound lowerFlag)
@@ -415,15 +472,73 @@ construct ( ( maybeLower, maybeUpper ), ( lowerFlag, upperFlag ) ) =
     Bounded ( lower, upper )
 
 
-parser : SubtypeConfig subtype -> Parser (Range subtype)
-parser subtypeConfig =
+
+{-
+   validate : Config subtype -> RangeInternal subtype -> Result String (RangeInternal subtype)
+   validate { canonical, compare } range_ =
+       let
+           boundErr =
+               Err "Lower bound must be less than or equal to upper bound"
+
+           checkBounds range =
+               case Maybe.map2 compare (lowerElement range) (upperElement range) of
+                   Just order ->
+                       case order of
+                           GT ->
+                               boundErr
+
+                           EQ ->
+                               -- Edge case: if bounds are equal, and both exclusive, range is empty
+                               if not (lowerBoundInclusive range || upperBoundInclusive range) then
+                                   Ok Empty
+
+                               else
+                                   range |> canonicalize |> normalize
+
+                           _ ->
+                               range |> canonicalize |> normalize
+
+                   Nothing ->
+                       range |> canonicalize |> normalize
+
+           normalize range =
+               case Maybe.map2 compare (lowerElement range) (upperElement range) of
+                   Just order ->
+                       case order of
+                           LT ->
+                               Ok range
+
+                           EQ ->
+                               Ok Empty
+
+                           GT ->
+                               boundErr
+
+                   Nothing ->
+                       Ok range
+
+           canonicalize range =
+               case canonical of
+                   Nothing ->
+                       range
+
+                   Just fn ->
+                       construct (fn range)
+       in
+       range_
+           |> checkBounds
+-}
+
+
+parser : Config subtype -> Parser (RangeInternal subtype)
+parser config =
     let
         parseSubtype ( bound, str ) =
             if String.isEmpty str then
                 Parser.succeed Infinite
 
             else
-                case subtypeConfig.fromString str of
+                case config.fromString str of
                     Ok date ->
                         Parser.succeed (bound date)
 
@@ -461,15 +576,20 @@ parser subtypeConfig =
         |= lowerBoundParser
         |. Parser.symbol ","
         |= upperBoundParser
-        |> Parser.andThen
-            (\range ->
-                case validate subtypeConfig range of
-                    Ok range_ ->
-                        Parser.succeed range_
 
-                    Err err ->
-                        Parser.problem err
-            )
+
+
+{-
+   |> Parser.andThen
+       (\range ->
+           case validate config range of
+               Ok range_ ->
+                   Parser.succeed range_
+
+               Err err ->
+                   Parser.problem err
+       )
+-}
 
 
 boundElement : Bound subtype -> Maybe subtype
@@ -638,25 +758,7 @@ compareBounds compare ( bound1, bound1Type ) ( bound2, bound2Type ) =
             compare bound1Val bound2Val
 
 
-min : (subtype -> subtype -> Order) -> subtype -> subtype -> subtype
-min compare x y =
-    if lt compare x y then
-        x
-
-    else
-        y
-
-
-max : (subtype -> subtype -> Order) -> subtype -> subtype -> subtype
-max compare x y =
-    if gt compare x y then
-        x
-
-    else
-        y
-
-
-rangeCompare : SubtypeConfig subtype -> Range subtype -> Range subtype -> Order
+rangeCompare : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Order
 rangeCompare { compare } r1 r2 =
     case ( r1, r2 ) of
         ( Empty, Empty ) ->
