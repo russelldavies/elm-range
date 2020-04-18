@@ -16,7 +16,6 @@ module Range exposing
     , lowerBoundInfinite
     , lowerElement
     , merge
-    , serialize
     , toString
     , upperBoundInclusive
     , upperBoundInfinite
@@ -53,8 +52,12 @@ type alias Config subtype =
     { toString : subtype -> String
     , fromString : String -> Result String subtype
     , compare : subtype -> subtype -> Order
-    , canonical : Maybe (RangeInternal subtype -> ( ( Maybe subtype, Maybe subtype ), ( BoundFlag, BoundFlag ) ))
+    , canonical : Maybe (Canonical subtype)
     }
+
+
+type alias Canonical subtype =
+    ( ( BoundFlag, subtype -> subtype ), ( BoundFlag, subtype -> subtype ) )
 
 
 type BoundFlag
@@ -350,35 +353,25 @@ encode config =
 
 {-| Construct a range value from bounds and range flags
 
-This does not force canonicalization of the range value. In most cases,
-external callers should only be canonicalization functions. Note that we
+This does not force canonicalization of the range value. Note that we
 perform some datatype-independent canonicalization checks anyway.
 
 -}
 serialize :
     (subtype -> subtype -> Order)
-    -> Maybe ( ( BoundFlag, subtype -> subtype ), ( BoundFlag, subtype -> subtype ) )
-    -> Maybe subtype
-    -> Maybe subtype
-    -> ( BoundFlag, BoundFlag )
+    -> ( Maybe subtype, Maybe subtype, ( BoundFlag, BoundFlag ) )
     -> Result String (RangeInternal subtype)
-serialize compare maybeCanonical maybeLower maybeUpper ( lowerFlag, upperFlag ) =
+serialize compare ( maybeLower, maybeUpper, ( lowerFlag, upperFlag ) ) =
     let
-        canonical =
-            Maybe.withDefault ( ( lowerFlag, identity ), ( upperFlag, identity ) ) maybeCanonical
-
-        lowerBound =
-            maybeLower
-                |> Maybe.map (canonicalize (Tuple.first canonical) lowerFlag)
-                |> Maybe.withDefault Infinite
-
-        upperBound =
-            maybeUpper
-                |> Maybe.map (canonicalize (Tuple.second canonical) upperFlag)
-                |> Maybe.withDefault Infinite
-
         boundedRange =
-            Bounded ( lowerBound, upperBound )
+            Bounded
+                ( maybeLower
+                    |> Maybe.map (flagToBound lowerFlag)
+                    |> Maybe.withDefault Infinite
+                , maybeUpper
+                    |> Maybe.map (flagToBound upperFlag)
+                    |> Maybe.withDefault Infinite
+                )
     in
     case Maybe.map2 compare maybeLower maybeUpper of
         Just GT ->
@@ -398,16 +391,75 @@ serialize compare maybeCanonical maybeLower maybeUpper ( lowerFlag, upperFlag ) 
             Ok boundedRange
 
 
-canonicalize ( canonicalFlag, step ) specifiedFlag val =
-    let
-        steppedVal =
-            if specifiedFlag == canonicalFlag then
-                val
+deserialize : RangeInternal subtype -> ( Maybe subtype, Maybe subtype, ( BoundFlag, BoundFlag ) )
+deserialize range =
+    case range of
+        Empty ->
+            ( Nothing, Nothing, ( Exc, Exc ) )
 
-            else
-                step val
-    in
-    flagToBound canonicalFlag <| steppedVal
+        Bounded ( lowerBound, upperBound ) ->
+            let
+                ( lowerVal, lowerFlag ) =
+                    boundToValFlag lowerBound
+
+                ( upperVal, upperFlag ) =
+                    boundToValFlag upperBound
+            in
+            ( lowerVal, upperVal, ( lowerFlag, upperFlag ) )
+
+
+{-| Serialize and canonicalize (if applicable) the range
+-}
+make :
+    Config subtype
+    -> ( Maybe subtype, Maybe subtype, ( BoundFlag, BoundFlag ) )
+    -> Result String (RangeInternal subtype)
+make { compare, canonical } rangeParts =
+    rangeParts
+        |> serialize compare
+        |> Result.andThen
+            (canonical
+                |> Maybe.map (canonicalize compare)
+                |> Maybe.withDefault Ok
+            )
+
+
+canonicalize :
+    (subtype -> subtype -> Order)
+    -> Canonical subtype
+    -> RangeInternal subtype
+    -> Result String (RangeInternal subtype)
+canonicalize compare canonical range =
+    if isEmpty range then
+        Ok range
+
+    else
+        let
+            ( lowerVal, upperVal, ( lowerFlag, upperFlag ) ) =
+                deserialize range
+
+            lower =
+                Maybe.map (stepVal (Tuple.first canonical) lowerFlag) lowerVal
+
+            upper =
+                Maybe.map (stepVal (Tuple.second canonical) upperFlag) upperVal
+        in
+        serialize compare
+            ( lower
+            , upper
+            , ( (Tuple.first >> Tuple.first) canonical
+              , (Tuple.second >> Tuple.first) canonical
+              )
+            )
+
+
+stepVal : ( BoundFlag, subtype -> subtype ) -> BoundFlag -> subtype -> subtype
+stepVal ( canonicalFlag, step ) specifiedFlag val =
+    if specifiedFlag == canonicalFlag then
+        val
+
+    else
+        step val
 
 
 flagToBound : BoundFlag -> (subtype -> Bound subtype)
@@ -430,46 +482,6 @@ boundToValFlag bound =
 
         Infinite ->
             ( Nothing, Exc )
-
-
-deserialize : RangeInternal subtype -> ( Maybe subtype, Maybe subtype, ( BoundFlag, BoundFlag ) )
-deserialize range =
-    case range of
-        Empty ->
-            ( Nothing, Nothing, ( Exc, Exc ) )
-
-        Bounded ( lowerBound, upperBound ) ->
-            let
-                ( lowerVal, lowerFlag ) =
-                    boundToValFlag lowerBound
-
-                ( upperVal, upperFlag ) =
-                    boundToValFlag upperBound
-            in
-            ( lowerVal, upperVal, ( lowerFlag, upperFlag ) )
-
-
-{-| Construct a range from bounds
-
-This does not force canonicalization of the range value. In most cases,
-external callers should only be canonicalization functions. Note that we
-perform some datatype-independent canonicalization checks anyway.
-
--}
-construct : Maybe subtype -> Maybe subtype -> ( BoundFlag, BoundFlag ) -> RangeInternal subtype
-construct maybeLower maybeUpper ( lowerFlag, upperFlag ) =
-    let
-        lower =
-            maybeLower
-                |> Maybe.map (flagToBound lowerFlag)
-                |> Maybe.withDefault Infinite
-
-        upper =
-            maybeUpper
-                |> Maybe.map (flagToBound upperFlag)
-                |> Maybe.withDefault Infinite
-    in
-    Bounded ( lower, upper )
 
 
 
