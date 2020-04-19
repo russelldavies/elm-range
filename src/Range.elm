@@ -83,25 +83,42 @@ create :
     Config subtype
     -> Maybe subtype
     -> Maybe subtype
-    -> ( BoundFlag, BoundFlag )
+    -> Maybe ( BoundFlag, BoundFlag )
     -> Result String (Range subtype)
-create config maybeLower maybeUpper flags =
-    -- Flags are mandatory as it will be the subtype's canonical function that
-    -- specifies the convention to use.
-    {-
-       construct maybeLower maybeUpper flags
-           |> validate config
-           |> Result.map (Range config)
-    -}
-    Ok <| Range config Empty
+create config lower upper flags =
+    let
+        defaultFlags =
+            ( Inc, Exc )
+    in
+    make config ( lower, upper, Maybe.withDefault defaultFlags flags )
+        |> Result.map (Range config)
 
 
 fromString :
     Config subtype
     -> String
-    -> Result (List Parser.DeadEnd) (RangeInternal subtype)
-fromString config =
-    Parser.run (parser config)
+    -> Result String (Range subtype)
+fromString config str =
+    case Parser.run (parser config) str of
+        Ok rangeParts ->
+            make config rangeParts |> Result.map (Range config)
+
+        Err errs ->
+            errs
+                |> List.map
+                    (\err ->
+                        case err.problem of
+                            Parser.Problem s ->
+                                s ++ " at col " ++ String.fromInt err.col
+
+                            Parser.ExpectingSymbol s ->
+                                "Expecting " ++ s ++ " at col " ++ String.fromInt err.col
+
+                            _ ->
+                                "Invalid string"
+                    )
+                |> String.join "; "
+                |> Err
 
 
 toString : Config subtype -> RangeInternal subtype -> String
@@ -326,7 +343,7 @@ merge { compare } range1 range2 =
 -}
 decoder :
     Config subtype
-    -> Decode.Decoder (RangeInternal subtype)
+    -> Decode.Decoder (Range subtype)
 decoder config =
     Decode.string
         |> Decode.andThen
@@ -484,124 +501,52 @@ boundToValFlag bound =
             ( Nothing, Exc )
 
 
-
-{-
-   validate : Config subtype -> RangeInternal subtype -> Result String (RangeInternal subtype)
-   validate { canonical, compare } range_ =
-       let
-           boundErr =
-               Err "Lower bound must be less than or equal to upper bound"
-
-           checkBounds range =
-               case Maybe.map2 compare (lowerElement range) (upperElement range) of
-                   Just order ->
-                       case order of
-                           GT ->
-                               boundErr
-
-                           EQ ->
-                               -- Edge case: if bounds are equal, and both exclusive, range is empty
-                               if not (lowerBoundInclusive range || upperBoundInclusive range) then
-                                   Ok Empty
-
-                               else
-                                   range |> canonicalize |> normalize
-
-                           _ ->
-                               range |> canonicalize |> normalize
-
-                   Nothing ->
-                       range |> canonicalize |> normalize
-
-           normalize range =
-               case Maybe.map2 compare (lowerElement range) (upperElement range) of
-                   Just order ->
-                       case order of
-                           LT ->
-                               Ok range
-
-                           EQ ->
-                               Ok Empty
-
-                           GT ->
-                               boundErr
-
-                   Nothing ->
-                       Ok range
-
-           canonicalize range =
-               case canonical of
-                   Nothing ->
-                       range
-
-                   Just fn ->
-                       construct (fn range)
-       in
-       range_
-           |> checkBounds
--}
-
-
-parser : Config subtype -> Parser (RangeInternal subtype)
+parser : Config subtype -> Parser ( Maybe subtype, Maybe subtype, ( BoundFlag, BoundFlag ) )
 parser config =
     let
-        parseSubtype ( bound, str ) =
+        cast str =
             if String.isEmpty str then
-                Parser.succeed Infinite
+                Parser.succeed Nothing
 
             else
                 case config.fromString str of
-                    Ok date ->
-                        Parser.succeed (bound date)
+                    Ok val ->
+                        Parser.succeed (Just val)
 
                     Err error ->
                         Parser.problem error
 
         lowerBoundParser =
-            Parser.succeed (\bound str -> ( bound, str ))
+            Parser.succeed Tuple.pair
                 |= Parser.oneOf
-                    [ Parser.succeed Inclusive
+                    [ Parser.succeed Inc
                         |. Parser.symbol "["
-                    , Parser.succeed Exclusive
+                    , Parser.succeed Exc
                         |. Parser.symbol "("
                     ]
-                |= Parser.getChompedString (Parser.chompUntil ",")
-                |> Parser.andThen parseSubtype
+                |= (Parser.getChompedString (Parser.chompUntil ",") |> Parser.andThen cast)
 
         upperBoundParser =
-            Parser.succeed (\str bound -> ( bound, str ))
-                |= Parser.getChompedString
-                    (Parser.oneOf
-                        [ Parser.chompUntil ")"
-                        , Parser.chompUntil "]"
-                        ]
-                    )
+            Parser.succeed Tuple.pair
+                |= (Parser.getChompedString
+                        (Parser.oneOf
+                            [ Parser.chompUntil ")"
+                            , Parser.chompUntil "]"
+                            ]
+                        )
+                        |> Parser.andThen cast
+                   )
                 |= Parser.oneOf
-                    [ Parser.succeed Inclusive
+                    [ Parser.succeed Inc
                         |. Parser.symbol "]"
-                    , Parser.succeed Exclusive
+                    , Parser.succeed Exc
                         |. Parser.symbol ")"
                     ]
-                |> Parser.andThen parseSubtype
     in
-    Parser.succeed (\lower upper -> Bounded ( lower, upper ))
+    Parser.succeed (\( lowerFlag, lower ) ( upper, upperFlag ) -> ( lower, upper, ( lowerFlag, upperFlag ) ))
         |= lowerBoundParser
         |. Parser.symbol ","
         |= upperBoundParser
-
-
-
-{-
-   |> Parser.andThen
-       (\range ->
-           case validate config range of
-               Ok range_ ->
-                   Parser.succeed range_
-
-               Err err ->
-                   Parser.problem err
-       )
--}
 
 
 boundElement : Bound subtype -> Maybe subtype
