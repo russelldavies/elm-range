@@ -4,7 +4,6 @@ module Range exposing
     , Range
     , configs
     , containsElement
-    , containsRangeInternal
     , create
     , decoder
     , empty
@@ -156,9 +155,13 @@ fromString config str =
                 |> Err
 
 
-toString : Config subtype -> RangeInternal subtype -> String
-toString config range =
-    case range of
+toString : Range subtype -> String
+toString range =
+    let
+        config =
+            range.config
+    in
+    case range.range of
         Empty ->
             "empty"
 
@@ -196,29 +199,35 @@ toString config range =
 -- OPERATIONS
 
 
-equal : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
-equal config r1 r2 =
+equal : Range subtype -> Range subtype -> Bool
+equal r1 r2 =
     r1 == r2
 
 
-lessThan : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
-lessThan config r1 r2 =
-    rangeCompare config r1 r2 == LT
+lessThan : Range subtype -> Range subtype -> Bool
+lessThan r1 r2 =
+    rangeCompare r1.config r1.range r2.range == LT
 
 
-containsRangeInternal : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
-containsRangeInternal ({ compare } as config) outerRangeInternal innerRangeInternal =
+
+{-
+   containsRangeInternal : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
+   containsRangeInternal ({ compare } as config) outerRangeInternal innerRangeInternal =
+       let
+           comp el =
+               Maybe.map (containsElement config outerRangeInternal) (el innerRangeInternal)
+                   |> Maybe.withDefault False
+       in
+       comp lowerElement && comp upperElement
+-}
+
+
+containsElement : Range subtype -> subtype -> Bool
+containsElement range element =
     let
-        comp el =
-            Maybe.map (containsElement config outerRangeInternal) (el innerRangeInternal)
-                |> Maybe.withDefault False
-    in
-    comp lowerElement && comp upperElement
+        compare =
+            range.config.compare
 
-
-containsElement : Config subtype -> RangeInternal subtype -> subtype -> Bool
-containsElement { compare } range element =
-    let
         lt_ =
             lt compare
 
@@ -231,7 +240,7 @@ containsElement { compare } range element =
         gte_ =
             gte compare
     in
-    case range of
+    case range.range of
         Empty ->
             False
 
@@ -269,9 +278,9 @@ containsElement { compare } range element =
 -- FUNCTIONS
 
 
-lowerElement : RangeInternal subtype -> Maybe subtype
+lowerElement : Range subtype -> Maybe subtype
 lowerElement range =
-    case range of
+    case range.range of
         Bounded ( lower, _ ) ->
             boundElement lower
 
@@ -279,9 +288,9 @@ lowerElement range =
             Nothing
 
 
-upperElement : RangeInternal subtype -> Maybe subtype
+upperElement : Range subtype -> Maybe subtype
 upperElement range =
-    case range of
+    case range.range of
         Bounded ( _, upper ) ->
             boundElement upper
 
@@ -289,9 +298,9 @@ upperElement range =
             Nothing
 
 
-isEmpty : RangeInternal subtype -> Bool
+isEmpty : Range subtype -> Bool
 isEmpty range =
-    case range of
+    case range.range of
         Bounded _ ->
             False
 
@@ -299,9 +308,9 @@ isEmpty range =
             True
 
 
-lowerBoundInclusive : RangeInternal subtype -> Bool
+lowerBoundInclusive : Range subtype -> Bool
 lowerBoundInclusive range =
-    case range of
+    case range.range of
         Bounded ( Inclusive _, _ ) ->
             True
 
@@ -309,9 +318,9 @@ lowerBoundInclusive range =
             False
 
 
-upperBoundInclusive : RangeInternal subtype -> Bool
+upperBoundInclusive : Range subtype -> Bool
 upperBoundInclusive range =
-    case range of
+    case range.range of
         Bounded ( _, Inclusive _ ) ->
             True
 
@@ -319,9 +328,9 @@ upperBoundInclusive range =
             False
 
 
-lowerBoundInfinite : RangeInternal subtype -> Bool
+lowerBoundInfinite : Range subtype -> Bool
 lowerBoundInfinite range =
-    case range of
+    case range.range of
         Bounded ( Infinite, _ ) ->
             True
 
@@ -329,9 +338,9 @@ lowerBoundInfinite range =
             False
 
 
-upperBoundInfinite : RangeInternal subtype -> Bool
+upperBoundInfinite : Range subtype -> Bool
 upperBoundInfinite range =
-    case range of
+    case range.range of
         Bounded ( _, Infinite ) ->
             True
 
@@ -339,11 +348,15 @@ upperBoundInfinite range =
             False
 
 
-merge : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> RangeInternal subtype
-merge { compare } range1 range2 =
-    case ( range1, range2 ) of
+merge : Range subtype -> Range subtype -> Range subtype
+merge range1 range2 =
+    let
+        config =
+            range1.config
+    in
+    case ( range1.range, range2.range ) of
         ( Empty, Empty ) ->
-            Empty
+            empty config
 
         ( Bounded _, Empty ) ->
             range1
@@ -354,20 +367,20 @@ merge { compare } range1 range2 =
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
             let
                 lower =
-                    if compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound ) == LT then
+                    if compareBounds config.compare ( lower1, LowerBound ) ( lower2, LowerBound ) == LT then
                         lower1
 
                     else
                         lower2
 
                 upper =
-                    if compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound ) == GT then
+                    if compareBounds config.compare ( upper1, UpperBound ) ( upper2, UpperBound ) == GT then
                         upper1
 
                     else
                         upper2
             in
-            Bounded ( lower, upper )
+            Range config <| Bounded ( lower, upper )
 
 
 
@@ -394,9 +407,9 @@ decoder config =
 
 {-| Encode RangeInternal to JSON
 -}
-encode : Config subtype -> RangeInternal subtype -> Encode.Value
-encode config =
-    toString config >> Encode.string
+encode : Range subtype -> Encode.Value
+encode =
+    toString >> Encode.string
 
 
 
@@ -482,7 +495,16 @@ canonicalize :
     -> RangeInternal subtype
     -> Result String (RangeInternal subtype)
 canonicalize compare canonical range =
-    if isEmpty range then
+    let
+        empty_ =
+            case range of
+                Bounded _ ->
+                    False
+
+                Empty ->
+                    True
+    in
+    if empty_ then
         Ok range
 
     else
