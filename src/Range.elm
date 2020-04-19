@@ -2,20 +2,30 @@ module Range exposing
     ( BoundFlag(..)
     , Config
     , Range
+    , ce
     , configs
-    , containsElement
+    , cr
     , create
     , decoder
     , empty
     , encode
-    , equal
+    , eq
     , fromString
+    , gt
+    , gte
     , isEmpty
-    , lessThan
     , lowerBoundInclusive
     , lowerBoundInfinite
     , lowerElement
+    , lt
+    , lte
     , merge
+    , neq
+    , nxl
+    , nxr
+    , ov
+    , sl
+    , sr
     , toString
     , upperBoundInclusive
     , upperBoundInfinite
@@ -34,8 +44,8 @@ import Time
 
 
 {-| Be aware that a Range stores functions internally.
-If you want to use `(==)` for comparing two Ranges use the [equal](#equal)
-function.
+If you want to use `(==)` for comparing two Ranges use the [eq](#eq)
+operator.
 -}
 type alias Range subtype =
     { config : Config subtype
@@ -200,54 +210,139 @@ toString range =
 
 
 
--- OPERATIONS
+-- OPERATORS
+-- No custom operators :(
 
 
-{-| Check the equality of two `Range`s
+{-| Equal
 
-Use this over `(==)`.
+    -- > Ok True
+    Result.map2 Range.eq
+        (Range.create Range.configs.int (Just 1) (Just 5) Nothing)
+        (Range.fromString Range.configs.int "[1,4]")
+
+Use this over `(==)` which may cause a runtime error.
 
 -}
-equal : Range subtype -> Range subtype -> Bool
-equal r1 r2 =
+eq : Range subtype -> Range subtype -> Bool
+eq r1 r2 =
     rangeCompare r1.config r1.range r2.range == EQ
 
 
-lessThan : Range subtype -> Range subtype -> Bool
-lessThan r1 r2 =
+{-| Not Equal
+
+    -- Ok True
+    Result.map2 Range.neq
+        (Range.create Range.configs.float (Just 1.1) (Just 2.2) Nothing)
+        (Range.create Range.configs.float (Just 1.1) (Just 2.3) Nothing)
+
+-}
+neq : Range subtype -> Range subtype -> Bool
+neq r1 r2 =
+    rangeCompare r1.config r1.range r2.range /= EQ
+
+
+{-| Less Than
+
+    -- Ok True
+    Result.map2 Range.lt
+        (Range.create Range.configs.int (Just 1) (Just 10) Nothing)
+        (Range.create Range.configs.int (Just 2) (Just 3) Nothing)
+
+-}
+lt : Range subtype -> Range subtype -> Bool
+lt r1 r2 =
     rangeCompare r1.config r1.range r2.range == LT
 
 
+{-| Greater Than
 
-{-
-   containsRangeInternal : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
-   containsRangeInternal ({ compare } as config) outerRangeInternal innerRangeInternal =
-       let
-           comp el =
-               Maybe.map (containsElement config outerRangeInternal) (el innerRangeInternal)
-                   |> Maybe.withDefault False
-       in
-       comp lowerElement && comp upperElement
+    -- Ok True
+    Result.map2 Range.gt
+        (Range.create Range.configs.int (Just 1) (Just 10) Nothing)
+        (Range.create Range.configs.int (Just 1) (Just 5) Nothing)
+
 -}
+gt : Range subtype -> Range subtype -> Bool
+gt r1 r2 =
+    rangeCompare r1.config r1.range r2.range == LT
 
 
-containsElement : Range subtype -> subtype -> Bool
-containsElement range element =
+{-| Less Than or Equal
+
+    -- Ok True
+    Result.map2 Range.lte
+        (Range.create Range.configs.float (Just 1.1) (Just 2.2) Nothing)
+        (Range.create Range.configs.float (Just 1.1) (Just 2.2) Nothing)
+
+-}
+lte : Range subtype -> Range subtype -> Bool
+lte r1 r2 =
+    let
+        cmp =
+            rangeCompare r1.config r1.range r2.range
+    in
+    cmp == LT || cmp == EQ
+
+
+{-| Greater Than or Equal
+
+    -- Ok True
+    Result.map2 Range.gte
+        (Range.create Range.configs.float (Just 1.1) (Just 2.2) Nothing)
+        (Range.create Range.configs.float (Just 1.1) (Just 2.0) Nothing)
+
+-}
+gte : Range subtype -> Range subtype -> Bool
+gte r1 r2 =
+    let
+        cmp =
+            rangeCompare r1.config r1.range r2.range
+    in
+    cmp == GT || cmp == EQ
+
+
+{-| Contains Range
+
+    -- Ok True
+    Result.map2 Range.cr
+        (Range.create Range.configs.int (Just 2) (Just 4) Nothing)
+        (Range.create Range.configs.int (Just 2) (Just 3) Nothing)
+
+-}
+cr : Range subtype -> Range subtype -> Bool
+cr r1 r2 =
+    contains r1.config r1.range r2.range
+
+
+{-| Contains Element
+
+    -- Ok True
+    Result.map2 Range.ce
+        (Range.fromString Range.configs.timestamp "[2011-01-01,2011-03-01)"
+        (Iso8601.toTime "2011-01-10")
+
+-}
+ce : Range subtype -> subtype -> Bool
+ce range element =
     let
         compare =
             range.config.compare
 
-        lt_ =
-            lt compare
+        eq_ =
+            compare element >> (==) EQ
 
-        lte_ =
-            lte compare
+        lt_ =
+            compare element >> (==) GT
 
         gt_ =
-            gt compare
+            compare element >> (==) LT
+
+        lte_ =
+            compare element >> (/=) LT
 
         gte_ =
-            gte compare
+            compare element >> (/=) GT
     in
     case range.range of
         Empty ->
@@ -256,31 +351,196 @@ containsElement range element =
         Bounded bounds ->
             case bounds of
                 ( Inclusive lower, Inclusive upper ) ->
-                    lte_ lower element && lte_ element upper
+                    lte_ lower && gt_ upper
 
                 ( Inclusive lower, Exclusive upper ) ->
-                    lte_ lower element && lt_ element upper
+                    lte_ lower && gte_ upper
 
                 ( Exclusive lower, Inclusive upper ) ->
-                    lt_ lower element && lte_ element upper
+                    lt_ lower && gt_ upper
 
                 ( Exclusive lower, Exclusive upper ) ->
-                    lt_ lower element && lt_ element upper
+                    lt_ lower && gte_ upper
 
                 ( Infinite, Inclusive upper ) ->
-                    lte_ element upper
+                    gt_ upper
 
                 ( Infinite, Exclusive upper ) ->
-                    lt_ element upper
+                    gte_ upper
 
                 ( Inclusive lower, Infinite ) ->
-                    lte_ lower element
+                    lte_ lower
 
                 ( Exclusive lower, Infinite ) ->
-                    lt_ lower element
+                    lt_ lower
 
                 ( Infinite, Infinite ) ->
                     True
+
+
+{-| Overlap (have points in common)
+
+    -- Ok True
+    Result.map2 Range.ov
+        (Range.fromString Range.configs.int (Just 3) (Just 7) Nothing)
+        (Range.fromString Range.configs.int (Just 4) (Just 12) Nothing)
+
+-}
+ov : Range subtype -> Range subtype -> Bool
+ov r1 r2 =
+    let
+        compare =
+            r1.config.compare
+    in
+    case ( r1.range, r2.range ) of
+        -- An empty range does not overlap any other range
+        ( Empty, Empty ) ->
+            False
+
+        ( Empty, _ ) ->
+            False
+
+        ( _, Empty ) ->
+            False
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            let
+                ll1 =
+                    compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound )
+
+                lu1 =
+                    compareBounds compare ( lower1, LowerBound ) ( upper2, UpperBound )
+
+                ll2 =
+                    compareBounds compare ( lower2, LowerBound ) ( lower1, LowerBound )
+
+                lu2 =
+                    compareBounds compare ( lower2, LowerBound ) ( upper1, UpperBound )
+            in
+            if (ll1 == GT || ll1 == EQ) && (lu1 == LT || lu1 == EQ) then
+                True
+
+            else if (ll2 == GT || ll2 == EQ) && (lu2 == LT || lu2 == EQ) then
+                True
+
+            else
+                False
+
+
+{-| Strictly Left of
+
+    -- Ok True
+    Result.map2 Range.sl
+        (Range.fromString Range.configs.int (Just 1) (Just 10) Nothing)
+        (Range.fromString Range.configs.int (Just 100) (Just 110) Nothing)
+
+-}
+sl : Range subtype -> Range subtype -> Bool
+sl r1 r2 =
+    let
+        compare =
+            r1.config.compare
+    in
+    case ( r1.range, r2.range ) of
+        -- An empty range does not overlap any other range
+        ( Empty, Empty ) ->
+            False
+
+        ( Empty, _ ) ->
+            False
+
+        ( _, Empty ) ->
+            False
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            compareBounds compare ( upper1, UpperBound ) ( lower2, LowerBound ) == LT
+
+
+{-| Strictly Right of
+
+    -- Ok True
+    Result.map2 Range.sr
+        (Range.fromString Range.configs.int (Just 50) (Just 60) Nothing)
+        (Range.fromString Range.configs.int (Just 20) (Just 30) Nothing)
+
+-}
+sr : Range subtype -> Range subtype -> Bool
+sr r1 r2 =
+    let
+        compare =
+            r1.config.compare
+    in
+    case ( r1.range, r2.range ) of
+        -- An empty range does not overlap any other range
+        ( Empty, Empty ) ->
+            False
+
+        ( Empty, _ ) ->
+            False
+
+        ( _, Empty ) ->
+            False
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            compareBounds compare ( upper1, UpperBound ) ( lower2, LowerBound ) == GT
+
+
+{-| Does not extend to the right of
+
+    -- Ok True
+    Result.map2 Range.nxr
+        (Range.fromString Range.configs.int (Just 1) (Just 20) Nothing)
+        (Range.fromString Range.configs.int (Just 18) (Just 20) Nothing)
+
+-}
+nxr : Range subtype -> Range subtype -> Bool
+nxr r1 r2 =
+    let
+        compare =
+            r1.config.compare
+    in
+    case ( r1.range, r2.range ) of
+        -- An empty range does not overlap any other range
+        ( Empty, Empty ) ->
+            False
+
+        ( Empty, _ ) ->
+            False
+
+        ( _, Empty ) ->
+            False
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound ) == GT
+
+
+{-| Does not extend to the left of
+
+    -- Ok True
+    Result.map2 Range.nxl
+        (Range.fromString Range.configs.int (Just 7) (Just 20) Nothing)
+        (Range.fromString Range.configs.int (Just 5) (Just 10) Nothing)
+
+-}
+nxl : Range subtype -> Range subtype -> Bool
+nxl r1 r2 =
+    let
+        compare =
+            r1.config.compare
+    in
+    case ( r1.range, r2.range ) of
+        -- An empty range does not overlap any other range
+        ( Empty, Empty ) ->
+            False
+
+        ( Empty, _ ) ->
+            False
+
+        ( _, Empty ) ->
+            False
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound ) == LT
 
 
 
@@ -628,46 +888,6 @@ boundElement bound =
             Nothing
 
 
-lt : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
-lt compare a b =
-    case compare a b of
-        LT ->
-            True
-
-        _ ->
-            False
-
-
-lte : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
-lte compare a b =
-    case compare a b of
-        GT ->
-            False
-
-        _ ->
-            True
-
-
-gt : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
-gt compare a b =
-    case compare a b of
-        GT ->
-            True
-
-        _ ->
-            False
-
-
-gte : (subtype -> subtype -> Order) -> subtype -> subtype -> Bool
-gte compare a b =
-    case compare a b of
-        LT ->
-            False
-
-        _ ->
-            False
-
-
 {-| Compare two bounds.
 
 The bounds can be any combination of upper and lower; so it's useful for a
@@ -806,3 +1026,33 @@ rangeCompare { compare } r1 r2 =
 
             else
                 lowerBoundOrder
+
+
+contains : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
+contains { compare } r1 r2 =
+    case ( r1, r2 ) of
+        ( Empty, Empty ) ->
+            True
+
+        ( Empty, _ ) ->
+            False
+
+        ( _, Empty ) ->
+            True
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            let
+                lowerBoundOrder =
+                    compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound )
+
+                upperBoundOrder =
+                    compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound )
+            in
+            if lowerBoundOrder == GT then
+                False
+
+            else if upperBoundOrder == LT then
+                False
+
+            else
+                True

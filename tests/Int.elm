@@ -144,26 +144,26 @@ equal =
     describe "equal"
         [ test "both empty" <|
             \_ ->
-                Range.equal emptyRange emptyRange
+                Range.eq emptyRange emptyRange
                     |> Expect.true "Both empty should be true"
         , describe "one empty"
             [ fuzzRange "first empty"
-                (Range.equal emptyRange
+                (Range.eq emptyRange
                     >> Expect.false "Empty and non-empty should be false"
                 )
             , fuzzRange "second empty"
-                (flip Range.equal emptyRange
+                (flip Range.eq emptyRange
                     >> Expect.false "Empty and non-empty should be false"
                 )
             ]
         , describe "both filled"
             [ fuzzRange "same range" <|
                 \range ->
-                    Range.equal range range
+                    Range.eq range range
                         |> Expect.true "Same range should be equal"
             , fuzz2 IntFuzz.range IntFuzz.range "different values" <|
                 \range1 range2 ->
-                    Range.equal range1 range2
+                    Range.eq range1 range2
                         |> Expect.false "both filled with different values should be false"
             ]
         ]
@@ -181,69 +181,69 @@ lessThan =
     describe "lessThan"
         [ test "both empty" <|
             \_ ->
-                Range.lessThan emptyRange emptyRange
+                Range.lt emptyRange emptyRange
                     |> Expect.false "If both empty then should be false"
         , describe "one empty"
             [ fuzzRange "first empty"
-                (Range.lessThan emptyRange
+                (Range.lt emptyRange
                     >> Expect.true "Empty is always less than a bounded range"
                 )
             , fuzzRange "second empty"
-                (flip Range.lessThan emptyRange
+                (flip Range.lt emptyRange
                     >> Expect.false "Empty is never less than a bounded range"
                 )
             ]
         , describe "both bounded"
             [ fuzzRange "same range" <|
                 \range ->
-                    Range.lessThan range range
+                    Range.lt range range
                         |> Expect.false "A range is not less than itself"
             , describe "both bounds finite"
                 [ test "Lower less and upper equal" <|
                     \_ ->
-                        Range.lessThan
+                        Range.lt
                             (create (Just 1) (Just 5))
                             (create (Just 2) (Just 5))
                             |> Expect.true "[1,5) < [2,5)"
                 , test "Lower less and upper less" <|
                     \_ ->
-                        Range.lessThan
+                        Range.lt
                             (create (Just 1) (Just 4))
                             (create (Just 2) (Just 5))
                             |> Expect.true "[1,4) < [2,5)"
                 , test "Lower less and upper more" <|
                     \_ ->
-                        Range.lessThan
+                        Range.lt
                             (create (Just 1) (Just 5))
                             (create (Just 2) (Just 4))
                             |> Expect.true "[1,5) < [2,4)"
                 , test "Lower equal and upper less" <|
                     \_ ->
-                        Range.lessThan
+                        Range.lt
                             (create (Just 1) (Just 4))
                             (create (Just 1) (Just 5))
                             |> Expect.true "[1,4) < [1,5)"
                 , test "Lower equal and upper more" <|
                     \_ ->
-                        Range.lessThan
+                        Range.lt
                             (create (Just 1) (Just 5))
                             (create (Just 1) (Just 4))
                             |> Expect.false "[1,5) not < [1,4)"
                 , test "Lower more and upper equal" <|
                     \_ ->
-                        Range.lessThan
+                        Range.lt
                             (create (Just 2) (Just 5))
                             (create (Just 1) (Just 5))
                             |> Expect.false "[2,5) not < [1,5)"
                 , test "Lower more and upper less" <|
                     \_ ->
-                        Range.lessThan
+                        Range.lt
                             (create (Just 2) (Just 4))
                             (create (Just 1) (Just 5))
                             |> Expect.false "[2,4) not < [1,5)"
                 , test "Lower more and upper more" <|
                     \_ ->
-                        Range.lessThan
+                        Range.lt
                             (create (Just 2) (Just 5))
                             (create (Just 1) (Just 4))
                             |> Expect.false "[2,5) not < [1,4)"
@@ -251,13 +251,13 @@ lessThan =
             , describe "infinite and finite bounds"
                 [ fuzz2 Fuzz.int IntFuzz.rangeFinite "Infinite lower" <|
                     \i range ->
-                        Range.lessThan
+                        Range.lt
                             (create Nothing (Just i))
                             range
                             |> Expect.true "Should be less than any finite range"
                 , fuzz IntFuzz.rangeFinite "Infinite upper" <|
                     \range ->
-                        Range.lessThan
+                        Range.lt
                             (create (Range.lowerElement range) Nothing)
                             range
                             |> Expect.false "Should be greater than any finite range"
