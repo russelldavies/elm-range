@@ -2,6 +2,7 @@ module Range exposing
     ( BoundFlag(..)
     , Config
     , Range
+    , configs
     , containsElement
     , containsRangeInternal
     , create
@@ -22,9 +23,11 @@ module Range exposing
     , upperElement
     )
 
+import Iso8601
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Parser exposing ((|.), (|=), Parser)
+import Time
 
 
 
@@ -68,6 +71,38 @@ type BoundFlag
 type BoundType
     = LowerBound
     | UpperBound
+
+
+
+-- CONFIGS
+
+
+configs =
+    { int =
+        { toString = String.fromInt
+        , fromString = String.toInt >> Result.fromMaybe "Invalid integer"
+        , compare = Basics.compare
+        , canonical = Just ( ( Inc, (+) 1 ), ( Exc, (+) 1 ) )
+        }
+    , float =
+        { toString = String.fromFloat
+        , fromString = String.toFloat >> Result.fromMaybe "Invalid float"
+        , compare = Basics.compare
+        , canonical = Nothing
+        }
+    , string =
+        { toString = identity
+        , fromString = identity >> Ok
+        , compare = Basics.compare
+        , canonical = Nothing
+        }
+    , timestamp =
+        { fromString = Iso8601.toTime >> Result.mapError (always "Time format invalid")
+        , compare = \lower upper -> Basics.compare (Time.posixToMillis lower) (Time.posixToMillis upper)
+        , toString = Iso8601.fromTime
+        , canonical = Nothing
+        }
+    }
 
 
 
