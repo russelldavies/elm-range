@@ -33,6 +33,10 @@ import Time
 -- MODELS
 
 
+{-| Be aware that a Range stores functions internally.
+If you want to use `(==)` for comparing two Ranges use the [equal](#equal)
+function.
+-}
 type alias Range subtype =
     { config : Config subtype
     , range : RangeInternal subtype
@@ -199,9 +203,14 @@ toString range =
 -- OPERATIONS
 
 
+{-| Check the equality of two `Range`s
+
+Use this over `(==)`.
+
+-}
 equal : Range subtype -> Range subtype -> Bool
 equal r1 r2 =
-    r1 == r2
+    rangeCompare r1.config r1.range r2.range == EQ
 
 
 lessThan : Range subtype -> Range subtype -> Bool
