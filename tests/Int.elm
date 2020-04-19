@@ -10,8 +10,7 @@ module Int exposing
 
 import Expect exposing (Expectation)
 import Fuzz
-import Range exposing (Range)
-import Range.Int
+import Range exposing (Range, configs)
 import Range.Int.Fuzz as IntFuzz
 import Test exposing (..)
 
@@ -25,7 +24,7 @@ canonical =
     describe "Verifies Int canonical function"
         [ fuzz2 IntFuzz.validMaybeIntPair IntFuzz.boundFlagPair "Random bound values and flags" <|
             \(( maybeLowerElement, maybeUpperElement ) as elements) boundFlags ->
-                Range.Int.create maybeLowerElement maybeUpperElement (Just boundFlags)
+                Range.create configs.int maybeLowerElement maybeUpperElement (Just boundFlags)
                     |> Result.map (validRange elements boundFlags)
                     |> resultFailErr
         ]
@@ -39,7 +38,7 @@ checkBounds : Test
 checkBounds =
     fuzz IntFuzz.intPair "Check range bounds: lower must be less than or equal to upper" <|
         \( lower, upper ) ->
-            case Range.Int.create (Just lower) (Just upper) Nothing of
+            case Range.create configs.int (Just lower) (Just upper) Nothing of
                 Ok range ->
                     case compare lower upper of
                         LT ->
@@ -60,7 +59,7 @@ checkBounds =
                             Expect.fail "Valid bounds, should be empty"
 
                         GT ->
-                            Expect.equal err "Lower bound must be less than or equal to upper bound"
+                            Expect.equal err "Range lower bound must be less than or equal to range upper bound"
 
 
 fromString : Test
@@ -78,7 +77,7 @@ fromString =
                     ++ elementToString maybeUpperElement
                     ++ String.fromChar upperBoundFlagChar
                 )
-                    |> Range.Int.fromString
+                    |> Range.fromString configs.int
                     |> Result.map
                         (validRange elements
                             ( if lowerBoundFlagChar == '[' then
@@ -95,7 +94,7 @@ fromString =
                         )
                     |> Result.withDefault (Expect.fail "Invalid")
         , fuzz Fuzz.string "Random string that should fail" <|
-            (Range.Int.fromString
+            (Range.fromString configs.int
                 >> Result.map (always (Expect.fail "Created range with invalid string"))
                 >> Result.withDefault Expect.pass
             )
@@ -104,35 +103,31 @@ fromString =
 
 toString : Test
 toString =
-    let
-        fail =
-            Result.withDefault (Expect.fail "Valid range")
-    in
     describe "Convert valid range to string"
         [ test "Empty range" <|
-            \_ -> Range.empty |> Range.Int.toString |> Expect.equal "empty"
+            \_ -> Range.empty configs.int |> Range.toString |> Expect.equal "empty"
         , fuzz IntFuzz.rangeString "Restore the original string" <|
             \rangeStr ->
                 -- Can use fromString as it's been tested already
                 rangeStr
-                    |> Range.Int.fromString
-                    |> Result.map (Range.Int.toString >> Expect.equal rangeStr)
-                    |> fail
+                    |> Range.fromString configs.int
+                    |> Result.map (Range.toString >> Expect.equal rangeStr)
+                    |> resultFailErr
         , test "Infinite range (both sides)" <|
             \_ ->
-                Range.Int.create Nothing Nothing Nothing
-                    |> Result.map (Range.Int.toString >> Expect.equal "(,)")
-                    |> fail
+                Range.create configs.int Nothing Nothing Nothing
+                    |> Result.map (Range.toString >> Expect.equal "(,)")
+                    |> resultFailErr
         , test "Infinite range (lower)" <|
             \_ ->
-                Range.Int.create Nothing (Just 10) Nothing
-                    |> Result.map (Range.Int.toString >> Expect.equal "(,10)")
-                    |> fail
+                Range.create configs.int Nothing (Just 10) Nothing
+                    |> Result.map (Range.toString >> Expect.equal "(,10)")
+                    |> resultFailErr
         , test "Infinite range (upper)" <|
             \_ ->
-                Range.Int.create (Just 10) Nothing Nothing
-                    |> Result.map (Range.Int.toString >> Expect.equal "[10,)")
-                    |> fail
+                Range.create configs.int (Just 10) Nothing Nothing
+                    |> Result.map (Range.toString >> Expect.equal "[10,)")
+                    |> resultFailErr
         ]
 
 
@@ -142,29 +137,33 @@ toString =
 
 equal : Test
 equal =
+    let
+        emptyRange =
+            Range.empty configs.int
+    in
     describe "equal"
         [ test "both empty" <|
             \_ ->
-                Range.Int.equal Range.empty Range.empty
+                Range.equal emptyRange emptyRange
                     |> Expect.true "Both empty should be true"
         , describe "one empty"
             [ fuzzRange "first empty"
-                (Range.Int.equal Range.empty
+                (Range.equal emptyRange
                     >> Expect.false "Empty and non-empty should be false"
                 )
             , fuzzRange "second empty"
-                (flip Range.Int.equal Range.empty
+                (flip Range.equal emptyRange
                     >> Expect.false "Empty and non-empty should be false"
                 )
             ]
         , describe "both filled"
             [ fuzzRange "same range" <|
                 \range ->
-                    Range.Int.equal range range
+                    Range.equal range range
                         |> Expect.true "Same range should be equal"
             , fuzz2 IntFuzz.range IntFuzz.range "different values" <|
                 \range1 range2 ->
-                    Range.Int.equal range1 range2
+                    Range.equal range1 range2
                         |> Expect.false "both filled with different values should be false"
             ]
         ]
@@ -173,75 +172,78 @@ equal =
 lessThan : Test
 lessThan =
     let
+        emptyRange =
+            Range.empty configs.int
+
         create l u =
-            Range.Int.create l u Nothing |> Result.withDefault Range.empty
+            Range.create configs.int l u Nothing |> Result.withDefault emptyRange
     in
     describe "lessThan"
         [ test "both empty" <|
             \_ ->
-                Range.Int.lessThan Range.empty Range.empty
+                Range.lessThan emptyRange emptyRange
                     |> Expect.false "If both empty then should be false"
         , describe "one empty"
             [ fuzzRange "first empty"
-                (Range.Int.lessThan Range.empty
+                (Range.lessThan emptyRange
                     >> Expect.true "Empty is always less than a bounded range"
                 )
             , fuzzRange "second empty"
-                (flip Range.Int.lessThan Range.empty
+                (flip Range.lessThan emptyRange
                     >> Expect.false "Empty is never less than a bounded range"
                 )
             ]
         , describe "both bounded"
             [ fuzzRange "same range" <|
                 \range ->
-                    Range.Int.lessThan range range
+                    Range.lessThan range range
                         |> Expect.false "A range is not less than itself"
             , describe "both bounds finite"
                 [ test "Lower less and upper equal" <|
                     \_ ->
-                        Range.Int.lessThan
+                        Range.lessThan
                             (create (Just 1) (Just 5))
                             (create (Just 2) (Just 5))
                             |> Expect.true "[1,5) < [2,5)"
                 , test "Lower less and upper less" <|
                     \_ ->
-                        Range.Int.lessThan
+                        Range.lessThan
                             (create (Just 1) (Just 4))
                             (create (Just 2) (Just 5))
                             |> Expect.true "[1,4) < [2,5)"
                 , test "Lower less and upper more" <|
                     \_ ->
-                        Range.Int.lessThan
+                        Range.lessThan
                             (create (Just 1) (Just 5))
                             (create (Just 2) (Just 4))
                             |> Expect.true "[1,5) < [2,4)"
                 , test "Lower equal and upper less" <|
                     \_ ->
-                        Range.Int.lessThan
+                        Range.lessThan
                             (create (Just 1) (Just 4))
                             (create (Just 1) (Just 5))
                             |> Expect.true "[1,4) < [1,5)"
                 , test "Lower equal and upper more" <|
                     \_ ->
-                        Range.Int.lessThan
+                        Range.lessThan
                             (create (Just 1) (Just 5))
                             (create (Just 1) (Just 4))
                             |> Expect.false "[1,5) not < [1,4)"
                 , test "Lower more and upper equal" <|
                     \_ ->
-                        Range.Int.lessThan
+                        Range.lessThan
                             (create (Just 2) (Just 5))
                             (create (Just 1) (Just 5))
                             |> Expect.false "[2,5) not < [1,5)"
                 , test "Lower more and upper less" <|
                     \_ ->
-                        Range.Int.lessThan
+                        Range.lessThan
                             (create (Just 2) (Just 4))
                             (create (Just 1) (Just 5))
                             |> Expect.false "[2,4) not < [1,5)"
                 , test "Lower more and upper more" <|
                     \_ ->
-                        Range.Int.lessThan
+                        Range.lessThan
                             (create (Just 2) (Just 5))
                             (create (Just 1) (Just 4))
                             |> Expect.false "[2,5) not < [1,4)"
@@ -249,13 +251,13 @@ lessThan =
             , describe "infinite and finite bounds"
                 [ fuzz2 Fuzz.int IntFuzz.rangeFinite "Infinite lower" <|
                     \i range ->
-                        Range.Int.lessThan
+                        Range.lessThan
                             (create Nothing (Just i))
                             range
                             |> Expect.true "Should be less than any finite range"
                 , fuzz IntFuzz.rangeFinite "Infinite upper" <|
                     \range ->
-                        Range.Int.lessThan
+                        Range.lessThan
                             (create (Range.lowerElement range) Nothing)
                             range
                             |> Expect.false "Should be greater than any finite range"
@@ -281,7 +283,7 @@ isEmpty : Test
 isEmpty =
     let
         createRange bounds =
-            Range.Int.create (Just 1) (Just 1) (Just bounds)
+            Range.create configs.int (Just 1) (Just 1) (Just bounds)
                 |> Result.map Range.isEmpty
     in
     describe "isEmpty"
