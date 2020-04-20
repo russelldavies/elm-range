@@ -1,10 +1,14 @@
 module Int exposing
     ( canonical
+    , ce
     , checkBounds
-    , equal
+    , cr
+    , eq
     , fromString
+    , gt
     , isEmpty
-    , lessThan
+    , lt
+    , neq
     , toString
     )
 
@@ -137,11 +141,11 @@ toString =
 
 
 
--- OPERATIONS
+-- OPERATORS
 
 
-equal : Test
-equal =
+eq : Test
+eq =
     let
         emptyRange =
             Range.empty types.int
@@ -161,7 +165,7 @@ equal =
                     >> Expect.false "Empty and non-empty should be false"
                 )
             ]
-        , describe "both filled"
+        , describe "both bounded"
             [ fuzzRange "same range" <|
                 \range ->
                     Range.eq range range
@@ -169,13 +173,47 @@ equal =
             , fuzz2 IntFuzz.range IntFuzz.range "different values" <|
                 \range1 range2 ->
                     Range.eq range1 range2
-                        |> Expect.false "both filled with different values should be false"
+                        |> Expect.false "both bounded with different values should be false"
             ]
         ]
 
 
-lessThan : Test
-lessThan =
+neq : Test
+neq =
+    let
+        emptyRange =
+            Range.empty types.int
+    in
+    describe "not equal"
+        [ test "both empty" <|
+            \_ ->
+                Range.neq emptyRange emptyRange
+                    |> Expect.false "Both empty should be false"
+        , describe "one empty"
+            [ fuzzRange "first empty"
+                (Range.neq emptyRange
+                    >> Expect.true "Empty and non-empty should be true"
+                )
+            , fuzzRange "second empty"
+                (flip Range.neq emptyRange
+                    >> Expect.true "Empty and non-empty should be true"
+                )
+            ]
+        , describe "both bounded"
+            [ fuzzRange "same range" <|
+                \range ->
+                    Range.neq range range
+                        |> Expect.false "Same range should be not equal"
+            , fuzz2 IntFuzz.range IntFuzz.range "different values" <|
+                \range1 range2 ->
+                    Range.neq range1 range2
+                        |> Expect.true "both bounded with different values should be not equal"
+            ]
+        ]
+
+
+lt : Test
+lt =
     let
         emptyRange =
             Range.empty types.int
@@ -183,7 +221,7 @@ lessThan =
         create l u =
             Range.create types.int l u Nothing |> Result.withDefault emptyRange
     in
-    describe "lessThan"
+    describe "less than"
         [ test "both empty" <|
             \_ ->
                 Range.lt emptyRange emptyRange
@@ -271,6 +309,103 @@ lessThan =
         ]
 
 
+gt : Test
+gt =
+    let
+        emptyRange =
+            Range.empty types.int
+
+        create l u =
+            Range.create types.int l u Nothing |> Result.withDefault emptyRange
+    in
+    describe "greater than"
+        [ test "both empty" <|
+            \_ ->
+                Range.gt emptyRange emptyRange
+                    |> Expect.false "If both empty then should be false"
+        , describe "one empty"
+            [ fuzzRange "first empty"
+                (Range.gt emptyRange
+                    >> Expect.false "Empty is never greater than a bounded range"
+                )
+            , fuzzRange "second empty"
+                (flip Range.gt emptyRange
+                    >> Expect.true "Empty is always greater than a bounded range"
+                )
+            ]
+        , describe "both bounded"
+            [ fuzzRange "same range" <|
+                \range ->
+                    Range.gt range range
+                        |> Expect.false "A range is not less than itself"
+            , describe "both bounds finite"
+                [ test "Lower less and upper equal" <|
+                    \_ ->
+                        Range.gt
+                            (create (Just 1) (Just 5))
+                            (create (Just 2) (Just 5))
+                            |> Expect.false "[1,5) > [2,5)"
+                , test "Lower less and upper less" <|
+                    \_ ->
+                        Range.gt
+                            (create (Just 1) (Just 4))
+                            (create (Just 2) (Just 5))
+                            |> Expect.false "[1,4) > [2,5)"
+                , test "Lower less and upper more" <|
+                    \_ ->
+                        Range.gt
+                            (create (Just 1) (Just 5))
+                            (create (Just 2) (Just 4))
+                            |> Expect.false "[1,5) > [2,4)"
+                , test "Lower equal and upper less" <|
+                    \_ ->
+                        Range.gt
+                            (create (Just 1) (Just 4))
+                            (create (Just 1) (Just 5))
+                            |> Expect.false "[1,4) > [1,5)"
+                , test "Lower equal and upper more" <|
+                    \_ ->
+                        Range.gt
+                            (create (Just 1) (Just 5))
+                            (create (Just 1) (Just 4))
+                            |> Expect.true "[1,5) > [1,4)"
+                , test "Lower more and upper equal" <|
+                    \_ ->
+                        Range.gt
+                            (create (Just 2) (Just 5))
+                            (create (Just 1) (Just 5))
+                            |> Expect.true "[2,5) > [1,5)"
+                , test "Lower more and upper less" <|
+                    \_ ->
+                        Range.gt
+                            (create (Just 2) (Just 4))
+                            (create (Just 1) (Just 5))
+                            |> Expect.true "[2,4) < [1,5)"
+                , test "Lower more and upper more" <|
+                    \_ ->
+                        Range.gt
+                            (create (Just 2) (Just 5))
+                            (create (Just 1) (Just 4))
+                            |> Expect.true "[2,5) > [1,4)"
+                ]
+            , describe "infinite and finite bounds"
+                [ fuzz2 Fuzz.int IntFuzz.rangeFinite "Infinite lower" <|
+                    \i range ->
+                        Range.gt
+                            (create Nothing (Just i))
+                            range
+                            |> Expect.false "Should be less than any finite range"
+                , fuzz IntFuzz.rangeFinite "Infinite upper" <|
+                    \range ->
+                        Range.gt
+                            (create (Range.lowerElement range) Nothing)
+                            range
+                            |> Expect.true "Should be greater than any finite range"
+                ]
+            ]
+        ]
+
+
 flip : (a -> b -> c) -> b -> a -> c
 flip fn b a =
     fn a b
@@ -312,6 +447,96 @@ isEmpty =
                 ( Range.Exc, Range.Inc )
                     |> createRange
                     |> Expect.equal (Ok True)
+        ]
+
+
+cr : Test
+cr =
+    let
+        emptyRange =
+            Range.empty types.int
+    in
+    describe "Contains Range"
+        [ test "both empty" <|
+            \_ ->
+                Range.cr emptyRange emptyRange
+                    |> Expect.true "An empty range contains another"
+        , describe "one empty"
+            [ fuzzRange "first empty"
+                (Range.cr emptyRange
+                    >> Expect.false "An empty range doesn't contain an bound one"
+                )
+            , fuzzRange "second empty"
+                (flip Range.cr emptyRange
+                    >> Expect.true "A bound range contains an empty range"
+                )
+            ]
+        , describe "both bounded"
+            [ fuzzRange "same range" <|
+                \range ->
+                    Range.cr range range
+                        |> Expect.true "A range contains itself"
+            , fuzz2 IntFuzz.rangeFinite IntFuzz.rangeFinite "two bounded ranges" <|
+                \r1 r2 ->
+                    Maybe.map2 (&&)
+                        (Maybe.map2 (<=) (Range.lowerElement r1) (Range.lowerElement r2))
+                        (Maybe.map2 (>=) (Range.upperElement r1) (Range.upperElement r2))
+                        |> Maybe.withDefault False
+                        |> Expect.equal (Range.cr r1 r2)
+            ]
+        ]
+
+
+ce : Test
+ce =
+    let
+        emptyRange =
+            Range.empty types.int
+    in
+    describe "Contains Element"
+        [ test "both empty" <|
+            \_ ->
+                Range.cr emptyRange emptyRange
+                    |> Expect.true "An empty range contains another"
+        , describe "one empty"
+            [ fuzzRange "first empty"
+                (Range.cr emptyRange
+                    >> Expect.false "An empty range doesn't contain an bound one"
+                )
+            , fuzzRange "second empty"
+                (flip Range.cr emptyRange
+                    >> Expect.true "A bound range contains an empty range"
+                )
+            ]
+        , describe "both bounded"
+            [ fuzzRange "same range" <|
+                \range ->
+                    Range.cr range range
+                        |> Expect.true "A range contains itself"
+            , fuzz2 IntFuzz.rangeFinite IntFuzz.rangeFinite "two bounded ranges" <|
+                \range1 range2 ->
+                    let
+                        result =
+                            Range.cr range1 range2
+
+                        lower1 =
+                            Range.lowerElement range1
+
+                        upper1 =
+                            Range.upperElement range1
+
+                        lower2 =
+                            Range.lowerElement range2
+
+                        upper2 =
+                            Range.upperElement range2
+                    in
+                    Maybe.map2 (&&)
+                        (Maybe.map2 (<=) lower1 lower2)
+                        (Maybe.map2 (>=) upper1 upper2)
+                        |> Maybe.withDefault False
+                        |> Expect.equal (Range.cr range1 range2)
+            ]
         ]
 
 

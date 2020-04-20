@@ -272,7 +272,7 @@ lt r1 r2 =
 -}
 gt : Range subtype -> Range subtype -> Bool
 gt r1 r2 =
-    rangeCompare r1.config r1.range r2.range == LT
+    rangeCompare r1.config r1.range r2.range == GT
 
 
 {-| Less Than or Equal
@@ -1045,11 +1045,5 @@ contains { compare } r1 r2 =
                 upperBoundOrder =
                     compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound )
             in
-            if lowerBoundOrder == GT then
-                False
-
-            else if upperBoundOrder == LT then
-                False
-
-            else
-                True
+            -- lower1 <= lower2 and upper1 >= upper2
+            lowerBoundOrder /= GT && upperBoundOrder /= LT
