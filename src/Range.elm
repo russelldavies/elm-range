@@ -150,8 +150,13 @@ fromString :
     -> Result String (Range subtype)
 fromString config str =
     case Parser.run (parser config) str of
-        Ok rangeParts ->
-            make config rangeParts |> Result.map (Range config)
+        Ok maybeRangeParts ->
+            case maybeRangeParts of
+                Just rangeParts ->
+                    make config rangeParts |> Result.map (Range config)
+
+                Nothing ->
+                    Ok (empty config)
 
         Err errs ->
             errs
@@ -816,7 +821,7 @@ boundToValFlag bound =
             ( Nothing, Exc )
 
 
-parser : TypeConfig subtype -> Parser ( Maybe subtype, Maybe subtype, ( BoundFlag, BoundFlag ) )
+parser : TypeConfig subtype -> Parser (Maybe ( Maybe subtype, Maybe subtype, ( BoundFlag, BoundFlag ) ))
 parser config =
     let
         cast str =
@@ -858,10 +863,13 @@ parser config =
                         |. Parser.symbol ")"
                     ]
     in
-    Parser.succeed (\( lowerFlag, lower ) ( upper, upperFlag ) -> ( lower, upper, ( lowerFlag, upperFlag ) ))
-        |= lowerBoundParser
-        |. Parser.symbol ","
-        |= upperBoundParser
+    Parser.oneOf
+        [ Parser.keyword "empty" |> Parser.map (always Nothing)
+        , Parser.succeed (\( lowerFlag, lower ) ( upper, upperFlag ) -> Just ( lower, upper, ( lowerFlag, upperFlag ) ))
+            |= lowerBoundParser
+            |. Parser.symbol ","
+            |= upperBoundParser
+        ]
 
 
 boundElement : Bound subtype -> Maybe subtype

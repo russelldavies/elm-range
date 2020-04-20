@@ -98,6 +98,11 @@ fromString =
                 >> Result.map (always (Expect.fail "Created range with invalid string"))
                 >> Result.withDefault Expect.pass
             )
+        , test "Empty range" <|
+            \_ ->
+                Range.fromString types.int "empty"
+                    |> Result.map (Range.isEmpty >> Expect.true "`empty` is valid")
+                    |> resultFailErr
         ]
 
 
