@@ -1,9 +1,8 @@
 module Range exposing
     ( BoundFlag(..)
-    , Config
     , Range
+    , TypeConfig
     , ce
-    , configs
     , cr
     , create
     , decoder
@@ -27,6 +26,7 @@ module Range exposing
     , sl
     , sr
     , toString
+    , types
     , upperBoundInclusive
     , upperBoundInfinite
     , upperElement
@@ -48,7 +48,7 @@ If you want to use `(==)` for comparing two Ranges use the [eq](#eq)
 operator.
 -}
 type alias Range subtype =
-    { config : Config subtype
+    { config : TypeConfig subtype
     , range : RangeInternal subtype
     }
 
@@ -64,7 +64,7 @@ type Bound subtype
     | Infinite
 
 
-type alias Config subtype =
+type alias TypeConfig subtype =
     { toString : subtype -> String
     , fromString : String -> Result String subtype
     , compare : subtype -> subtype -> Order
@@ -81,16 +81,18 @@ type BoundFlag
     | Exc
 
 
+{-| Used internally for deserialization
+-}
 type BoundType
     = LowerBound
     | UpperBound
 
 
 
--- CONFIGS
+-- TYPE CLASSES
 
 
-configs =
+types =
     { int =
         { toString = String.fromInt
         , fromString = String.toInt >> Result.fromMaybe "Invalid integer"
@@ -122,13 +124,13 @@ configs =
 -- CREATE
 
 
-empty : Config subtype -> Range subtype
+empty : TypeConfig subtype -> Range subtype
 empty config =
     Range config Empty
 
 
 create :
-    Config subtype
+    TypeConfig subtype
     -> Maybe subtype
     -> Maybe subtype
     -> Maybe ( BoundFlag, BoundFlag )
@@ -143,7 +145,7 @@ create config lower upper flags =
 
 
 fromString :
-    Config subtype
+    TypeConfig subtype
     -> String
     -> Result String (Range subtype)
 fromString config str =
@@ -218,8 +220,8 @@ toString range =
 
     -- > Ok True
     Result.map2 Range.eq
-        (Range.create Range.configs.int (Just 1) (Just 5) Nothing)
-        (Range.fromString Range.configs.int "[1,4]")
+        (Range.create Range.types.int (Just 1) (Just 5) Nothing)
+        (Range.fromString Range.types.int "[1,4]")
 
 Use this over `(==)` which may cause a runtime error.
 
@@ -233,8 +235,8 @@ eq r1 r2 =
 
     -- Ok True
     Result.map2 Range.neq
-        (Range.create Range.configs.float (Just 1.1) (Just 2.2) Nothing)
-        (Range.create Range.configs.float (Just 1.1) (Just 2.3) Nothing)
+        (Range.create Range.types.float (Just 1.1) (Just 2.2) Nothing)
+        (Range.create Range.types.float (Just 1.1) (Just 2.3) Nothing)
 
 -}
 neq : Range subtype -> Range subtype -> Bool
@@ -246,8 +248,8 @@ neq r1 r2 =
 
     -- Ok True
     Result.map2 Range.lt
-        (Range.create Range.configs.int (Just 1) (Just 10) Nothing)
-        (Range.create Range.configs.int (Just 2) (Just 3) Nothing)
+        (Range.create Range.types.int (Just 1) (Just 10) Nothing)
+        (Range.create Range.types.int (Just 2) (Just 3) Nothing)
 
 -}
 lt : Range subtype -> Range subtype -> Bool
@@ -259,8 +261,8 @@ lt r1 r2 =
 
     -- Ok True
     Result.map2 Range.gt
-        (Range.create Range.configs.int (Just 1) (Just 10) Nothing)
-        (Range.create Range.configs.int (Just 1) (Just 5) Nothing)
+        (Range.create Range.types.int (Just 1) (Just 10) Nothing)
+        (Range.create Range.types.int (Just 1) (Just 5) Nothing)
 
 -}
 gt : Range subtype -> Range subtype -> Bool
@@ -272,8 +274,8 @@ gt r1 r2 =
 
     -- Ok True
     Result.map2 Range.lte
-        (Range.create Range.configs.float (Just 1.1) (Just 2.2) Nothing)
-        (Range.create Range.configs.float (Just 1.1) (Just 2.2) Nothing)
+        (Range.create Range.types.float (Just 1.1) (Just 2.2) Nothing)
+        (Range.create Range.types.float (Just 1.1) (Just 2.2) Nothing)
 
 -}
 lte : Range subtype -> Range subtype -> Bool
@@ -289,8 +291,8 @@ lte r1 r2 =
 
     -- Ok True
     Result.map2 Range.gte
-        (Range.create Range.configs.float (Just 1.1) (Just 2.2) Nothing)
-        (Range.create Range.configs.float (Just 1.1) (Just 2.0) Nothing)
+        (Range.create Range.types.float (Just 1.1) (Just 2.2) Nothing)
+        (Range.create Range.types.float (Just 1.1) (Just 2.0) Nothing)
 
 -}
 gte : Range subtype -> Range subtype -> Bool
@@ -306,8 +308,8 @@ gte r1 r2 =
 
     -- Ok True
     Result.map2 Range.cr
-        (Range.create Range.configs.int (Just 2) (Just 4) Nothing)
-        (Range.create Range.configs.int (Just 2) (Just 3) Nothing)
+        (Range.create Range.types.int (Just 2) (Just 4) Nothing)
+        (Range.create Range.types.int (Just 2) (Just 3) Nothing)
 
 -}
 cr : Range subtype -> Range subtype -> Bool
@@ -319,7 +321,7 @@ cr r1 r2 =
 
     -- Ok True
     Result.map2 Range.ce
-        (Range.fromString Range.configs.timestamp "[2011-01-01,2011-03-01)"
+        (Range.fromString Range.types.timestamp "[2011-01-01,2011-03-01)"
         (Iso8601.toTime "2011-01-10")
 
 -}
@@ -382,8 +384,8 @@ ce range element =
 
     -- Ok True
     Result.map2 Range.ov
-        (Range.fromString Range.configs.int (Just 3) (Just 7) Nothing)
-        (Range.fromString Range.configs.int (Just 4) (Just 12) Nothing)
+        (Range.fromString Range.types.int (Just 3) (Just 7) Nothing)
+        (Range.fromString Range.types.int (Just 4) (Just 12) Nothing)
 
 -}
 ov : Range subtype -> Range subtype -> Bool
@@ -393,16 +395,6 @@ ov r1 r2 =
             r1.config.compare
     in
     case ( r1.range, r2.range ) of
-        -- An empty range does not overlap any other range
-        ( Empty, Empty ) ->
-            False
-
-        ( Empty, _ ) ->
-            False
-
-        ( _, Empty ) ->
-            False
-
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
             let
                 ll1 =
@@ -426,13 +418,16 @@ ov r1 r2 =
             else
                 False
 
+        _ ->
+            False
+
 
 {-| Strictly Left of
 
     -- Ok True
     Result.map2 Range.sl
-        (Range.fromString Range.configs.int (Just 1) (Just 10) Nothing)
-        (Range.fromString Range.configs.int (Just 100) (Just 110) Nothing)
+        (Range.fromString Range.types.int (Just 1) (Just 10) Nothing)
+        (Range.fromString Range.types.int (Just 100) (Just 110) Nothing)
 
 -}
 sl : Range subtype -> Range subtype -> Bool
@@ -442,26 +437,19 @@ sl r1 r2 =
             r1.config.compare
     in
     case ( r1.range, r2.range ) of
-        -- An empty range does not overlap any other range
-        ( Empty, Empty ) ->
-            False
-
-        ( Empty, _ ) ->
-            False
-
-        ( _, Empty ) ->
-            False
-
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
             compareBounds compare ( upper1, UpperBound ) ( lower2, LowerBound ) == LT
+
+        _ ->
+            False
 
 
 {-| Strictly Right of
 
     -- Ok True
     Result.map2 Range.sr
-        (Range.fromString Range.configs.int (Just 50) (Just 60) Nothing)
-        (Range.fromString Range.configs.int (Just 20) (Just 30) Nothing)
+        (Range.fromString Range.types.int (Just 50) (Just 60) Nothing)
+        (Range.fromString Range.types.int (Just 20) (Just 30) Nothing)
 
 -}
 sr : Range subtype -> Range subtype -> Bool
@@ -471,26 +459,19 @@ sr r1 r2 =
             r1.config.compare
     in
     case ( r1.range, r2.range ) of
-        -- An empty range does not overlap any other range
-        ( Empty, Empty ) ->
-            False
-
-        ( Empty, _ ) ->
-            False
-
-        ( _, Empty ) ->
-            False
-
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
             compareBounds compare ( upper1, UpperBound ) ( lower2, LowerBound ) == GT
+
+        _ ->
+            False
 
 
 {-| Does not extend to the right of
 
     -- Ok True
     Result.map2 Range.nxr
-        (Range.fromString Range.configs.int (Just 1) (Just 20) Nothing)
-        (Range.fromString Range.configs.int (Just 18) (Just 20) Nothing)
+        (Range.fromString Range.types.int (Just 1) (Just 20) Nothing)
+        (Range.fromString Range.types.int (Just 18) (Just 20) Nothing)
 
 -}
 nxr : Range subtype -> Range subtype -> Bool
@@ -500,26 +481,19 @@ nxr r1 r2 =
             r1.config.compare
     in
     case ( r1.range, r2.range ) of
-        -- An empty range does not overlap any other range
-        ( Empty, Empty ) ->
-            False
-
-        ( Empty, _ ) ->
-            False
-
-        ( _, Empty ) ->
-            False
-
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
             compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound ) == GT
+
+        _ ->
+            False
 
 
 {-| Does not extend to the left of
 
     -- Ok True
     Result.map2 Range.nxl
-        (Range.fromString Range.configs.int (Just 7) (Just 20) Nothing)
-        (Range.fromString Range.configs.int (Just 5) (Just 10) Nothing)
+        (Range.fromString Range.types.int (Just 7) (Just 20) Nothing)
+        (Range.fromString Range.types.int (Just 5) (Just 10) Nothing)
 
 -}
 nxl : Range subtype -> Range subtype -> Bool
@@ -529,18 +503,33 @@ nxl r1 r2 =
             r1.config.compare
     in
     case ( r1.range, r2.range ) of
-        -- An empty range does not overlap any other range
-        ( Empty, Empty ) ->
-            False
-
-        ( Empty, _ ) ->
-            False
-
-        ( _, Empty ) ->
-            False
-
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
             compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound ) == LT
+
+        _ ->
+            False
+
+
+{-| Is Adjacent to
+
+    -- Ok True
+    Result.map2 Range.adj
+        (Range.fromString Range.types.float (Just 1.1) (Just 2.2) Nothing)
+        (Range.fromString Range.types.float (Just 2.2) (Just 3.3) Nothing)
+
+-}
+adj : Range subtype -> Range subtype -> Bool
+adj r1 r2 =
+    let
+        compare =
+            r1.config.compare
+    in
+    case ( r1.range, r2.range ) of
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound ) == LT
+
+        _ ->
+            False
 
 
 
@@ -659,7 +648,7 @@ merge range1 range2 =
 {-| RangeInternal JSON decoder
 -}
 decoder :
-    Config subtype
+    TypeConfig subtype
     -> Decode.Decoder (Range subtype)
 decoder config =
     Decode.string
@@ -745,7 +734,7 @@ deserialize range =
 {-| Serialize and canonicalize (if applicable) the range
 -}
 make :
-    Config subtype
+    TypeConfig subtype
     -> ( Maybe subtype, Maybe subtype, ( BoundFlag, BoundFlag ) )
     -> Result String (RangeInternal subtype)
 make { compare, canonical } rangeParts =
@@ -827,7 +816,7 @@ boundToValFlag bound =
             ( Nothing, Exc )
 
 
-parser : Config subtype -> Parser ( Maybe subtype, Maybe subtype, ( BoundFlag, BoundFlag ) )
+parser : TypeConfig subtype -> Parser ( Maybe subtype, Maybe subtype, ( BoundFlag, BoundFlag ) )
 parser config =
     let
         cast str =
@@ -1001,7 +990,7 @@ compareBounds compare ( bound1, bound1Type ) ( bound2, bound2Type ) =
             compare bound1Val bound2Val
 
 
-rangeCompare : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Order
+rangeCompare : TypeConfig subtype -> RangeInternal subtype -> RangeInternal subtype -> Order
 rangeCompare { compare } r1 r2 =
     case ( r1, r2 ) of
         ( Empty, Empty ) ->
@@ -1028,7 +1017,7 @@ rangeCompare { compare } r1 r2 =
                 lowerBoundOrder
 
 
-contains : Config subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
+contains : TypeConfig subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
 contains { compare } r1 r2 =
     case ( r1, r2 ) of
         ( Empty, Empty ) ->

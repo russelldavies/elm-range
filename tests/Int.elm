@@ -10,7 +10,7 @@ module Int exposing
 
 import Expect exposing (Expectation)
 import Fuzz
-import Range exposing (Range, configs)
+import Range exposing (Range, types)
 import Range.Int.Fuzz as IntFuzz
 import Test exposing (..)
 
@@ -24,7 +24,7 @@ canonical =
     describe "Verifies Int canonical function"
         [ fuzz2 IntFuzz.validMaybeIntPair IntFuzz.boundFlagPair "Random bound values and flags" <|
             \(( maybeLowerElement, maybeUpperElement ) as elements) boundFlags ->
-                Range.create configs.int maybeLowerElement maybeUpperElement (Just boundFlags)
+                Range.create types.int maybeLowerElement maybeUpperElement (Just boundFlags)
                     |> Result.map (validRange elements boundFlags)
                     |> resultFailErr
         ]
@@ -38,7 +38,7 @@ checkBounds : Test
 checkBounds =
     fuzz IntFuzz.intPair "Check range bounds: lower must be less than or equal to upper" <|
         \( lower, upper ) ->
-            case Range.create configs.int (Just lower) (Just upper) Nothing of
+            case Range.create types.int (Just lower) (Just upper) Nothing of
                 Ok range ->
                     case compare lower upper of
                         LT ->
@@ -77,7 +77,7 @@ fromString =
                     ++ elementToString maybeUpperElement
                     ++ String.fromChar upperBoundFlagChar
                 )
-                    |> Range.fromString configs.int
+                    |> Range.fromString types.int
                     |> Result.map
                         (validRange elements
                             ( if lowerBoundFlagChar == '[' then
@@ -94,7 +94,7 @@ fromString =
                         )
                     |> Result.withDefault (Expect.fail "Invalid")
         , fuzz Fuzz.string "Random string that should fail" <|
-            (Range.fromString configs.int
+            (Range.fromString types.int
                 >> Result.map (always (Expect.fail "Created range with invalid string"))
                 >> Result.withDefault Expect.pass
             )
@@ -105,27 +105,27 @@ toString : Test
 toString =
     describe "Convert valid range to string"
         [ test "Empty range" <|
-            \_ -> Range.empty configs.int |> Range.toString |> Expect.equal "empty"
+            \_ -> Range.empty types.int |> Range.toString |> Expect.equal "empty"
         , fuzz IntFuzz.rangeString "Restore the original string" <|
             \rangeStr ->
                 -- Can use fromString as it's been tested already
                 rangeStr
-                    |> Range.fromString configs.int
+                    |> Range.fromString types.int
                     |> Result.map (Range.toString >> Expect.equal rangeStr)
                     |> resultFailErr
         , test "Infinite range (both sides)" <|
             \_ ->
-                Range.create configs.int Nothing Nothing Nothing
+                Range.create types.int Nothing Nothing Nothing
                     |> Result.map (Range.toString >> Expect.equal "(,)")
                     |> resultFailErr
         , test "Infinite range (lower)" <|
             \_ ->
-                Range.create configs.int Nothing (Just 10) Nothing
+                Range.create types.int Nothing (Just 10) Nothing
                     |> Result.map (Range.toString >> Expect.equal "(,10)")
                     |> resultFailErr
         , test "Infinite range (upper)" <|
             \_ ->
-                Range.create configs.int (Just 10) Nothing Nothing
+                Range.create types.int (Just 10) Nothing Nothing
                     |> Result.map (Range.toString >> Expect.equal "[10,)")
                     |> resultFailErr
         ]
@@ -139,7 +139,7 @@ equal : Test
 equal =
     let
         emptyRange =
-            Range.empty configs.int
+            Range.empty types.int
     in
     describe "equal"
         [ test "both empty" <|
@@ -173,10 +173,10 @@ lessThan : Test
 lessThan =
     let
         emptyRange =
-            Range.empty configs.int
+            Range.empty types.int
 
         create l u =
-            Range.create configs.int l u Nothing |> Result.withDefault emptyRange
+            Range.create types.int l u Nothing |> Result.withDefault emptyRange
     in
     describe "lessThan"
         [ test "both empty" <|
@@ -283,7 +283,7 @@ isEmpty : Test
 isEmpty =
     let
         createRange bounds =
-            Range.create configs.int (Just 1) (Just 1) (Just bounds)
+            Range.create types.int (Just 1) (Just 1) (Just bounds)
                 |> Result.map Range.isEmpty
     in
     describe "isEmpty"

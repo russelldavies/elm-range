@@ -2,7 +2,7 @@ module Range.Int.Fuzz exposing (..)
 
 import Fuzz exposing (Fuzzer, int, list, string)
 import Random
-import Range exposing (Range, configs)
+import Range exposing (Range, types)
 import Shrink
 
 
@@ -12,8 +12,8 @@ range : Fuzzer (Range Int)
 range =
     Fuzz.map
         (\( lowerBound, upperBound ) ->
-            Range.create configs.int lowerBound upperBound Nothing
-                |> Result.withDefault (Range.empty configs.int)
+            Range.create types.int lowerBound upperBound Nothing
+                |> Result.withDefault (Range.empty types.int)
         )
         validMaybeIntPair
 
@@ -22,8 +22,8 @@ rangeFinite : Fuzzer (Range Int)
 rangeFinite =
     Fuzz.map
         (\( lowerBound, upperBound ) ->
-            Range.create configs.int (Just lowerBound) (Just upperBound) Nothing
-                |> Result.withDefault (Range.empty configs.int)
+            Range.create types.int (Just lowerBound) (Just upperBound) Nothing
+                |> Result.withDefault (Range.empty types.int)
         )
         validIntPair
 
