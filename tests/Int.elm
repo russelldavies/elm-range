@@ -14,6 +14,7 @@ module Int exposing
 
 import Expect exposing (Expectation)
 import Fuzz
+import Random
 import Range exposing (Range, types)
 import Range.Int.Fuzz as IntFuzz
 import Test exposing (..)
@@ -476,66 +477,23 @@ cr =
                 \range ->
                     Range.cr range range
                         |> Expect.true "A range contains itself"
-            , fuzz2 IntFuzz.rangeFinite IntFuzz.rangeFinite "two bounded ranges" <|
+            , fuzz2 IntFuzz.range IntFuzz.range "two bounded ranges" <|
                 \r1 r2 ->
-                    Maybe.map2 (&&)
-                        (Maybe.map2 (<=) (Range.lowerElement r1) (Range.lowerElement r2))
-                        (Maybe.map2 (>=) (Range.upperElement r1) (Range.upperElement r2))
-                        |> Maybe.withDefault False
-                        |> Expect.equal (Range.cr r1 r2)
-            ]
-        ]
-
-
-ce : Test
-ce =
-    let
-        emptyRange =
-            Range.empty types.int
-    in
-    describe "Contains Element"
-        [ test "both empty" <|
-            \_ ->
-                Range.cr emptyRange emptyRange
-                    |> Expect.true "An empty range contains another"
-        , describe "one empty"
-            [ fuzzRange "first empty"
-                (Range.cr emptyRange
-                    >> Expect.false "An empty range doesn't contain an bound one"
-                )
-            , fuzzRange "second empty"
-                (flip Range.cr emptyRange
-                    >> Expect.true "A bound range contains an empty range"
-                )
-            ]
-        , describe "both bounded"
-            [ fuzzRange "same range" <|
-                \range ->
-                    Range.cr range range
-                        |> Expect.true "A range contains itself"
-            , fuzz2 IntFuzz.rangeFinite IntFuzz.rangeFinite "two bounded ranges" <|
-                \range1 range2 ->
                     let
-                        result =
-                            Range.cr range1 range2
-
                         lower1 =
-                            Range.lowerElement range1
+                            Range.lowerElement r1 |> Maybe.withDefault Random.minInt
 
                         upper1 =
-                            Range.upperElement range1
+                            Range.upperElement r1 |> Maybe.withDefault Random.maxInt
 
                         lower2 =
-                            Range.lowerElement range2
+                            Range.lowerElement r2 |> Maybe.withDefault Random.minInt
 
                         upper2 =
-                            Range.upperElement range2
+                            Range.upperElement r2 |> Maybe.withDefault Random.maxInt
                     in
-                    Maybe.map2 (&&)
-                        (Maybe.map2 (<=) lower1 lower2)
-                        (Maybe.map2 (>=) upper1 upper2)
-                        |> Maybe.withDefault False
-                        |> Expect.equal (Range.cr range1 range2)
+                    -- lower1 <= lower2 and upper1 >= upper2
+                    Expect.equal (Range.cr r1 r2) ((lower1 <= lower2) && (upper1 >= upper2))
             ]
         ]
 
