@@ -498,6 +498,75 @@ cr =
         ]
 
 
+ce : Test
+ce =
+    let
+        constructTest { desc, bounds, expectation } =
+            let
+                lower =
+                    Tuple.first bounds
+
+                upper =
+                    Tuple.second bounds
+            in
+            test desc <|
+                \_ ->
+                    Range.create types.int lower upper Nothing
+                        |> Result.map (flip Range.ce 5 >> expectation)
+                        |> resultFailErr
+    in
+    describe "Contains Element"
+        [ fuzz Fuzz.int "empty" <|
+            Range.ce (Range.empty types.int)
+                >> Expect.false "An empty range contains no element"
+        , fuzz Fuzz.int "both bounds infinite" <|
+            \i ->
+                Range.fromString types.int "(,)"
+                    |> Result.map (flip Range.ce i >> Expect.true "An infinite range contains all elements")
+                    |> resultFailErr
+        , describe "lower bound infinite, upper bounded"
+            (List.map constructTest
+                [ { desc = "is contained"
+                  , bounds = ( Nothing, Just 10 )
+                  , expectation = Expect.true "Minus infinity to above value contains 5"
+                  }
+                , { desc = "is not contained"
+                  , bounds = ( Nothing, Just 0 )
+                  , expectation = Expect.false "Minus infinity to below value does not contain 5"
+                  }
+                ]
+            )
+        , describe "lower bounded, upper bound infinite"
+            (List.map constructTest
+                [ { desc = "is contained"
+                  , bounds = ( Just 0, Nothing )
+                  , expectation = Expect.true "0 to positive infinity contains 5"
+                  }
+                , { desc = "is not contained"
+                  , bounds = ( Just 10, Nothing )
+                  , expectation = Expect.false "10 to positive infinity does not contain 5"
+                  }
+                ]
+            )
+        , describe "both bounds finite"
+            (List.map constructTest
+                [ { desc = "lower less and upper greater"
+                  , bounds = ( Just 0, Just 10 )
+                  , expectation = Expect.true "0 <= 5 < 10"
+                  }
+                , { desc = "lower more and upper greater"
+                  , bounds = ( Just 7, Just 10 )
+                  , expectation = Expect.false "7 not <= 5"
+                  }
+                , { desc = "lower less and upper less"
+                  , bounds = ( Just 0, Just 2 )
+                  , expectation = Expect.false "0 <= 5 but 5 not < 2"
+                  }
+                ]
+            )
+        ]
+
+
 
 -- HELPERS
 
