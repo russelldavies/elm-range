@@ -2,8 +2,64 @@ module Range.Fuzz exposing (..)
 
 import Fuzz exposing (Fuzzer, int, list, string)
 import Random exposing (Generator)
-import Range
+import Range exposing (Range, types)
 import Shrink
+
+
+
+-- TYPE SPECIFIC FUZZERS
+
+
+{-| Is not empty but can contain an infinite bound
+-}
+intRange : Fuzzer (Range Int)
+intRange =
+    Fuzz.map
+        (\( lowerBound, upperBound ) ->
+            Range.create types.int lowerBound upperBound Nothing
+                |> Result.withDefault (Range.empty types.int)
+        )
+        (validMaybeNumPair Random.int)
+
+
+{-| Is not empty but bounds are always finite
+-}
+intRangeFinite : Fuzzer (Range Int)
+intRangeFinite =
+    Fuzz.map
+        (\( lowerBound, upperBound ) ->
+            Range.create types.int (Just lowerBound) (Just upperBound) Nothing
+                |> Result.withDefault (Range.empty types.int)
+        )
+        (validNumPair Random.int)
+
+
+{-| Is not empty but can contain an infinite bound
+-}
+floatRange : Fuzzer (Range Float)
+floatRange =
+    Fuzz.map
+        (\( lowerBound, upperBound ) ->
+            Range.create types.float lowerBound upperBound Nothing
+                |> Result.withDefault (Range.empty types.float)
+        )
+        (validMaybeNumPair Random.float)
+
+
+{-| Is not empty but bounds are always finite
+-}
+floatRangeFinite : Fuzzer (Range Float)
+floatRangeFinite =
+    Fuzz.map
+        (\( lowerBound, upperBound ) ->
+            Range.create types.float (Just lowerBound) (Just upperBound) Nothing
+                |> Result.withDefault (Range.empty types.float)
+        )
+        (validNumPair Random.float)
+
+
+
+-- GENERIC FUZZERS
 
 
 boundFlag : Fuzzer Range.BoundFlag

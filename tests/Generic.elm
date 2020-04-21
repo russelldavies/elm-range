@@ -5,7 +5,6 @@ import Fuzz exposing (Fuzzer)
 import Random
 import Range exposing (Range, types)
 import Range.Fuzz
-import Range.Int.Fuzz as IntFuzz
 import Test exposing (..)
 
 
@@ -122,7 +121,7 @@ eq =
                 \range ->
                     Range.eq range range
                         |> Expect.true "Same range should be equal"
-            , fuzz2 IntFuzz.range IntFuzz.range "different values" <|
+            , fuzz2 Range.Fuzz.intRange Range.Fuzz.intRange "different values" <|
                 \range1 range2 ->
                     Range.eq range1 range2
                         |> Expect.false "both bounded with different values should be false"
@@ -156,7 +155,7 @@ neq =
                 \range ->
                     Range.neq range range
                         |> Expect.false "Same range should be not equal"
-            , fuzz2 IntFuzz.range IntFuzz.range "different values" <|
+            , fuzz2 Range.Fuzz.floatRange Range.Fuzz.floatRange "different values" <|
                 \range1 range2 ->
                     Range.neq range1 range2
                         |> Expect.true "both bounded with different values should be not equal"
@@ -244,13 +243,13 @@ lt =
                             |> Expect.false "[2,5) not < [1,4)"
                 ]
             , describe "infinite and finite bounds"
-                [ fuzz2 Fuzz.int IntFuzz.rangeFinite "Infinite lower" <|
+                [ fuzz2 Fuzz.int Range.Fuzz.intRangeFinite "Infinite lower" <|
                     \i range ->
                         Range.lt
                             (create Nothing (Just i))
                             range
                             |> Expect.true "Should be less than any finite range"
-                , fuzz IntFuzz.rangeFinite "Infinite upper" <|
+                , fuzz Range.Fuzz.intRangeFinite "Infinite upper" <|
                     \range ->
                         Range.lt
                             (create (Range.lowerElement range) Nothing)
@@ -341,13 +340,13 @@ gt =
                             |> Expect.true "[2,5) > [1,4)"
                 ]
             , describe "infinite and finite bounds"
-                [ fuzz2 Fuzz.int IntFuzz.rangeFinite "Infinite lower" <|
+                [ fuzz2 Fuzz.int Range.Fuzz.intRangeFinite "Infinite lower" <|
                     \i range ->
                         Range.gt
                             (create Nothing (Just i))
                             range
                             |> Expect.false "Should be less than any finite range"
-                , fuzz IntFuzz.rangeFinite "Infinite upper" <|
+                , fuzz Range.Fuzz.intRangeFinite "Infinite upper" <|
                     \range ->
                         Range.gt
                             (create (Range.lowerElement range) Nothing)
@@ -384,7 +383,7 @@ cr =
                 \range ->
                     Range.cr range range
                         |> Expect.true "A range contains itself"
-            , fuzz2 IntFuzz.range IntFuzz.range "two bounded ranges" <|
+            , fuzz2 Range.Fuzz.intRange Range.Fuzz.intRange "two bounded ranges" <|
                 \r1 r2 ->
                     let
                         lower1 =
@@ -420,12 +419,12 @@ ce =
                         |> resultFailErr
     in
     describe "Contains Element"
-        [ fuzz Fuzz.int "empty" <|
-            Range.ce (Range.empty types.int)
+        [ fuzz Fuzz.float "empty" <|
+            Range.ce (Range.empty types.float)
                 >> Expect.false "An empty range contains no element"
-        , fuzz Fuzz.int "both bounds infinite" <|
+        , fuzz Fuzz.float "both bounds infinite" <|
             \i ->
-                Range.fromString types.int "(,)"
+                Range.fromString types.float "(,)"
                     |> Result.map (flip Range.ce i >> Expect.true "An infinite range contains all elements")
                     |> resultFailErr
         , describe "lower bound infinite, upper bounded"
@@ -480,36 +479,6 @@ ce =
                   }
                 ]
             )
-
-        {-
-           , fuzz2 IntFuzz.range Fuzz.int "Random non-empty range and element" <|
-               \r i ->
-                   let
-                       contains =
-                           Range.ce r i
-
-                       lower =
-                           Range.lowerElement r
-
-                       upper =
-                           Range.upperElement r
-                   in
-                   if Range.lowerBoundInfinite r && Range.upperBoundInfinite r then
-                       Expect.true "An infinite range contains all elements" contains
-
-                   else if not (Range.lowerBoundInfinite r) then
-                       if Maybe.map compare lower i |> Maybe.withDefault EQ then
-                           Expect.false "asdf"
-
-                       else
-                           Expect.true "asdf"
-
-                   else if not (Range.upperBoundInfinite r) then
-                       Expect.pass
-
-                   else
-                       Expect.true "foo" contains
-        -}
         ]
 
 
@@ -553,7 +522,7 @@ isEmpty =
 
 
 fuzzIntRange desc fn =
-    fuzz IntFuzz.range desc fn
+    fuzz Range.Fuzz.intRange desc fn
 
 
 validRange :
