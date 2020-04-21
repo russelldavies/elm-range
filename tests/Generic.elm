@@ -15,9 +15,13 @@ import Test exposing (..)
 
 checkBounds : Test
 checkBounds =
-    fuzz intPair "Check range bounds: lower must be less than or equal to upper" <|
+    let
+        floatPair =
+            Fuzz.tuple ( Fuzz.float, Fuzz.float )
+    in
+    fuzz floatPair "Check range bounds: lower must be less than or equal to upper" <|
         \( lower, upper ) ->
-            case Range.create types.int (Just lower) (Just upper) Nothing of
+            case Range.create types.float (Just lower) (Just upper) Nothing of
                 Ok range ->
                     case compare lower upper of
                         LT ->
@@ -46,6 +50,9 @@ fromString =
     let
         elementToString =
             Maybe.map String.fromInt >> Maybe.withDefault ""
+
+        validMaybeIntPair =
+            Range.Fuzz.validMaybeNumPair Random.int
     in
     describe "Creation from string parsing"
         [ fuzz2 validMaybeIntPair Range.Fuzz.boundFlagCharPair "Random bound values and flags" <|
@@ -101,17 +108,17 @@ eq =
                 Range.eq emptyRange emptyRange
                     |> Expect.true "Both empty should be true"
         , describe "one empty"
-            [ fuzzRange "first empty"
+            [ fuzzIntRange "first empty"
                 (Range.eq emptyRange
                     >> Expect.false "Empty and non-empty should be false"
                 )
-            , fuzzRange "second empty"
+            , fuzzIntRange "second empty"
                 (flip Range.eq emptyRange
                     >> Expect.false "Empty and non-empty should be false"
                 )
             ]
         , describe "both bounded"
-            [ fuzzRange "same range" <|
+            [ fuzzIntRange "same range" <|
                 \range ->
                     Range.eq range range
                         |> Expect.true "Same range should be equal"
@@ -135,17 +142,17 @@ neq =
                 Range.neq emptyRange emptyRange
                     |> Expect.false "Both empty should be false"
         , describe "one empty"
-            [ fuzzRange "first empty"
+            [ fuzzIntRange "first empty"
                 (Range.neq emptyRange
                     >> Expect.true "Empty and non-empty should be true"
                 )
-            , fuzzRange "second empty"
+            , fuzzIntRange "second empty"
                 (flip Range.neq emptyRange
                     >> Expect.true "Empty and non-empty should be true"
                 )
             ]
         , describe "both bounded"
-            [ fuzzRange "same range" <|
+            [ fuzzIntRange "same range" <|
                 \range ->
                     Range.neq range range
                         |> Expect.false "Same range should be not equal"
@@ -172,17 +179,17 @@ lt =
                 Range.lt emptyRange emptyRange
                     |> Expect.false "If both empty then should be false"
         , describe "one empty"
-            [ fuzzRange "first empty"
+            [ fuzzIntRange "first empty"
                 (Range.lt emptyRange
                     >> Expect.true "Empty is always less than a bounded range"
                 )
-            , fuzzRange "second empty"
+            , fuzzIntRange "second empty"
                 (flip Range.lt emptyRange
                     >> Expect.false "Empty is never less than a bounded range"
                 )
             ]
         , describe "both bounded"
-            [ fuzzRange "same range" <|
+            [ fuzzIntRange "same range" <|
                 \range ->
                     Range.lt range range
                         |> Expect.false "A range is not less than itself"
@@ -269,17 +276,17 @@ gt =
                 Range.gt emptyRange emptyRange
                     |> Expect.false "If both empty then should be false"
         , describe "one empty"
-            [ fuzzRange "first empty"
+            [ fuzzIntRange "first empty"
                 (Range.gt emptyRange
                     >> Expect.false "Empty is never greater than a bounded range"
                 )
-            , fuzzRange "second empty"
+            , fuzzIntRange "second empty"
                 (flip Range.gt emptyRange
                     >> Expect.true "Empty is always greater than a bounded range"
                 )
             ]
         , describe "both bounded"
-            [ fuzzRange "same range" <|
+            [ fuzzIntRange "same range" <|
                 \range ->
                     Range.gt range range
                         |> Expect.false "A range is not less than itself"
@@ -351,50 +358,6 @@ gt =
         ]
 
 
-flip : (a -> b -> c) -> b -> a -> c
-flip fn b a =
-    fn a b
-
-
-fuzzRange desc fn =
-    fuzz IntFuzz.range desc fn
-
-
-
--- Functions
-
-
-isEmpty : Test
-isEmpty =
-    let
-        createRange bounds =
-            Range.create types.int (Just 1) (Just 1) (Just bounds)
-                |> Result.map Range.isEmpty
-    in
-    describe "isEmpty"
-        [ test "inc-inc" <|
-            \_ ->
-                ( Range.Inc, Range.Inc )
-                    |> createRange
-                    |> Expect.equal (Ok False)
-        , test "inc-exc" <|
-            \_ ->
-                ( Range.Inc, Range.Exc )
-                    |> createRange
-                    |> Expect.equal (Ok True)
-        , test "exc-exc" <|
-            \_ ->
-                ( Range.Exc, Range.Exc )
-                    |> createRange
-                    |> Expect.equal (Ok True)
-        , test "exc-inc" <|
-            \_ ->
-                ( Range.Exc, Range.Inc )
-                    |> createRange
-                    |> Expect.equal (Ok True)
-        ]
-
-
 cr : Test
 cr =
     let
@@ -407,17 +370,17 @@ cr =
                 Range.cr emptyRange emptyRange
                     |> Expect.true "An empty range contains another"
         , describe "one empty"
-            [ fuzzRange "first empty"
+            [ fuzzIntRange "first empty"
                 (Range.cr emptyRange
                     >> Expect.false "An empty range doesn't contain an bound one"
                 )
-            , fuzzRange "second empty"
+            , fuzzIntRange "second empty"
                 (flip Range.cr emptyRange
                     >> Expect.true "A bound range contains an empty range"
                 )
             ]
         , describe "both bounded"
-            [ fuzzRange "same range" <|
+            [ fuzzIntRange "same range" <|
                 \range ->
                     Range.cr range range
                         |> Expect.true "A range contains itself"
@@ -551,13 +514,52 @@ ce =
 
 
 
+-- Functions
+
+
+isEmpty : Test
+isEmpty =
+    let
+        createRange bounds =
+            Range.create types.int (Just 1) (Just 1) (Just bounds)
+                |> Result.map Range.isEmpty
+    in
+    describe "isEmpty"
+        [ test "inc-inc" <|
+            \_ ->
+                ( Range.Inc, Range.Inc )
+                    |> createRange
+                    |> Expect.equal (Ok False)
+        , test "inc-exc" <|
+            \_ ->
+                ( Range.Inc, Range.Exc )
+                    |> createRange
+                    |> Expect.equal (Ok True)
+        , test "exc-exc" <|
+            \_ ->
+                ( Range.Exc, Range.Exc )
+                    |> createRange
+                    |> Expect.equal (Ok True)
+        , test "exc-inc" <|
+            \_ ->
+                ( Range.Exc, Range.Inc )
+                    |> createRange
+                    |> Expect.equal (Ok True)
+        ]
+
+
+
 -- HELPERS
 
 
+fuzzIntRange desc fn =
+    fuzz IntFuzz.range desc fn
+
+
 validRange :
-    ( Maybe Int, Maybe Int )
+    ( Maybe number, Maybe number )
     -> ( Range.BoundFlag, Range.BoundFlag )
-    -> Range Int
+    -> Range number
     -> Expectation
 validRange ( maybeLowerElement, maybeUpperElement ) ( lowerBoundFlag, upperBoundFlag ) range =
     let
@@ -628,21 +630,21 @@ expectedUpperBoundExclusive =
     Expect.false "Expected upper bound exclusive" << Range.upperBoundInclusive
 
 
-upperElementExpectation : Int -> Range.BoundFlag -> Range Int -> Expectation
+upperElementExpectation : number -> Range.BoundFlag -> Range number -> Expectation
 upperElementExpectation element boundFlag =
     Range.upperElement
         >> Maybe.map (Expect.equal (canonicalize boundFlag Range.Exc element))
         >> Maybe.withDefault (Expect.fail "Upper bound missing")
 
 
-lowerElementExpectation : Int -> Range.BoundFlag -> Range Int -> Expectation
+lowerElementExpectation : number -> Range.BoundFlag -> Range number -> Expectation
 lowerElementExpectation element boundFlag =
     Range.lowerElement
         >> Maybe.map (Expect.equal (canonicalize boundFlag Range.Inc element))
         >> Maybe.withDefault (Expect.fail "Lower bound missing")
 
 
-canonicalize : Range.BoundFlag -> Range.BoundFlag -> Int -> Int
+canonicalize : Range.BoundFlag -> Range.BoundFlag -> number -> number
 canonicalize flag expectedFlag el =
     if flag == expectedFlag then
         el
@@ -661,12 +663,6 @@ resultFailErr result =
             Expect.fail err
 
 
-{-| Lower may be greater than upper
--}
-intPair : Fuzzer ( Int, Int )
-intPair =
-    Fuzz.tuple ( Fuzz.int, Fuzz.int )
-
-
-validMaybeIntPair =
-    Range.Fuzz.validMaybeNumPair Random.int
+flip : (a -> b -> c) -> b -> a -> c
+flip fn b a =
+    fn a b
