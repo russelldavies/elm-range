@@ -32,6 +32,7 @@ module Range exposing
     , upperElement
     )
 
+import Comparison
 import Iso8601
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -331,25 +332,10 @@ cr r1 r2 =
 
 -}
 ce : Range subtype -> subtype -> Bool
-ce range element =
+ce range elem =
     let
-        compare =
-            range.config.compare
-
-        eq_ =
-            compare element >> (==) EQ
-
-        lt_ =
-            compare element >> (==) GT
-
-        gt_ =
-            compare element >> (==) LT
-
-        lte_ =
-            compare element >> (/=) LT
-
-        gte_ =
-            compare element >> (/=) GT
+        c =
+            Comparison.instance range.config.compare
     in
     case range.range of
         Empty ->
@@ -358,28 +344,28 @@ ce range element =
         Bounded bounds ->
             case bounds of
                 ( Inclusive lower, Inclusive upper ) ->
-                    lte_ lower && gt_ upper
+                    c.le lower elem && c.le elem upper
 
                 ( Inclusive lower, Exclusive upper ) ->
-                    lte_ lower && gte_ upper
+                    c.le lower elem && c.lt elem upper
 
                 ( Exclusive lower, Inclusive upper ) ->
-                    lt_ lower && gt_ upper
+                    c.lt lower elem && c.le elem upper
 
                 ( Exclusive lower, Exclusive upper ) ->
-                    lt_ lower && gte_ upper
+                    c.lt lower elem && c.lt elem upper
 
                 ( Infinite, Inclusive upper ) ->
-                    gt_ upper
+                    c.le elem upper
 
                 ( Infinite, Exclusive upper ) ->
-                    gte_ upper
+                    c.lt elem upper
 
                 ( Inclusive lower, Infinite ) ->
-                    lte_ lower
+                    c.le lower elem
 
                 ( Exclusive lower, Infinite ) ->
-                    lt_ lower
+                    c.lt lower elem
 
                 ( Infinite, Infinite ) ->
                     True
