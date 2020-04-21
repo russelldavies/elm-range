@@ -10,14 +10,14 @@ module Range exposing
     , encode
     , eq
     , fromString
+    , ge
     , gt
-    , gte
     , isEmpty
+    , le
     , lowerBoundInclusive
     , lowerBoundInfinite
     , lowerElement
     , lt
-    , lte
     , merge
     , neq
     , nxl
@@ -284,8 +284,8 @@ gt r1 r2 =
         (Range.create Range.types.float (Just 1.1) (Just 2.2) Nothing)
 
 -}
-lte : Range subtype -> Range subtype -> Bool
-lte r1 r2 =
+le : Range subtype -> Range subtype -> Bool
+le r1 r2 =
     let
         cmp =
             rangeCompare r1.config r1.range r2.range
@@ -301,8 +301,8 @@ lte r1 r2 =
         (Range.create Range.types.float (Just 1.1) (Just 2.0) Nothing)
 
 -}
-gte : Range subtype -> Range subtype -> Bool
-gte r1 r2 =
+ge : Range subtype -> Range subtype -> Bool
+ge r1 r2 =
     let
         cmp =
             rangeCompare r1.config r1.range r2.range
