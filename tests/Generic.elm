@@ -123,10 +123,19 @@ eq =
                         |> Expect.true "Same range should be equal"
             , fuzz2 Range.Fuzz.intRange Range.Fuzz.intRange "different values" <|
                 \range1 range2 ->
-                    Range.eq range1 range2
-                        |> Expect.false "both bounded with different values should be false"
+                    if infiniteRange range1 && infiniteRange range2 then
+                        Range.eq range1 range2
+                            |> Expect.true "Both infinite ranges are equal"
+
+                    else
+                        Range.eq range1 range2
+                            |> Expect.false "both bounded with different values should be false"
             ]
         ]
+
+
+infiniteRange r =
+    Range.lowerBoundInfinite r && Range.upperBoundInfinite r
 
 
 neq : Test
@@ -155,10 +164,15 @@ neq =
                 \range ->
                     Range.neq range range
                         |> Expect.false "Same range should be not equal"
-            , fuzz2 Range.Fuzz.floatRange Range.Fuzz.floatRange "different values" <|
+            , fuzz2 Range.Fuzz.intRange Range.Fuzz.intRange "different values" <|
                 \range1 range2 ->
-                    Range.neq range1 range2
-                        |> Expect.true "both bounded with different values should be not equal"
+                    if infiniteRange range1 && infiniteRange range2 then
+                        Range.neq range1 range2
+                            |> Expect.false "Both infinite ranges are equal"
+
+                    else
+                        Range.neq range1 range2
+                            |> Expect.true "both bounded with different values are not equal"
             ]
         ]
 

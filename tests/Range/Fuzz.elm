@@ -160,10 +160,8 @@ validMaybeNumPair numGenerator =
         max =
             2147483647
 
-        randJust =
-            Random.map Just
-
-        generator =
+        nothingOrNum : Generator (Maybe number)
+        nothingOrNum =
             Random.float 0 1
                 |> Random.andThen
                     (\p ->
@@ -171,20 +169,25 @@ validMaybeNumPair numGenerator =
                             Random.constant Nothing
 
                         else
-                            randJust <| numGenerator min (max - 1)
+                            numGenerator min max
+                                |> Random.map Just
                     )
+
+        generator : Generator ( Maybe number, Maybe number )
+        generator =
+            Random.pair nothingOrNum nothingOrNum
                 |> Random.andThen
-                    (Maybe.map
-                        (\num ->
-                            Random.pair
-                                (randJust <| Random.constant num)
-                                (randJust <| numGenerator (num + 1) max)
-                        )
-                        >> Maybe.withDefault
-                            (Random.pair
-                                (Random.constant Nothing)
-                                (randJust <| numGenerator min max)
-                            )
+                    (\pair ->
+                        case pair of
+                            ( Just a, Just b ) ->
+                                if a > b then
+                                    Random.constant ( Just b, Just a )
+
+                                else
+                                    Random.constant pair
+
+                            _ ->
+                                Random.constant pair
                     )
     in
     Fuzz.custom generator
