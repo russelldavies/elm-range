@@ -38,12 +38,13 @@ intRangeFinite =
 -}
 floatRange : Fuzzer (Range Float)
 floatRange =
-    Fuzz.map
-        (\( lowerBound, upperBound ) ->
-            Range.create types.float lowerBound upperBound Nothing
+    Fuzz.map2
+        (\( lowerBound, upperBound ) flags ->
+            Range.create types.float lowerBound upperBound (Just flags)
                 |> Result.withDefault (Range.empty types.float)
         )
         (validMaybeNumPair Random.float)
+        boundFlagPair
 
 
 {-| Is not empty but bounds are always finite

@@ -3,7 +3,7 @@ module Generic exposing (..)
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer)
 import Random
-import Range exposing (Range, types)
+import Range exposing (BoundFlag(..), Range, types)
 import Range.Fuzz
 import Test exposing (..)
 
@@ -447,13 +447,25 @@ ce =
                   , bounds = ( Nothing, Just 10, Nothing )
                   , expectation = Expect.true "5 in (,10)"
                   }
-                , { desc = "upper bound just outside"
-                  , bounds = ( Nothing, Just 5, Nothing )
-                  , expectation = Expect.false "5 not in (,5)"
-                  }
                 , { desc = "is not contained"
                   , bounds = ( Nothing, Just 0, Nothing )
                   , expectation = Expect.false "5 not in (,0)"
+                  }
+                , { desc = "same value as inc upper bound"
+                  , bounds = ( Nothing, Just 5, Just ( Inc, Inc ) )
+                  , expectation = Expect.true "5 in (,5]"
+                  }
+                , { desc = "just above inc upper bound"
+                  , bounds = ( Nothing, Just 4, Just ( Inc, Inc ) )
+                  , expectation = Expect.false "5 not in (,4]"
+                  }
+                , { desc = "same value as exc upper bound"
+                  , bounds = ( Nothing, Just 5, Just ( Inc, Exc ) )
+                  , expectation = Expect.false "5 not in (,5)"
+                  }
+                , { desc = "just above exc upper bound"
+                  , bounds = ( Nothing, Just 6, Just ( Inc, Exc ) )
+                  , expectation = Expect.true "5 in (,6)"
                   }
                 ]
             )
@@ -467,9 +479,21 @@ ce =
                   , bounds = ( Just 10, Nothing, Nothing )
                   , expectation = Expect.false "5 not in [10,)"
                   }
-                , { desc = "inclusive contained"
-                  , bounds = ( Just 5, Nothing, Nothing )
+                , { desc = "same value as inc lower bound"
+                  , bounds = ( Just 5, Nothing, Just ( Inc, Exc ) )
                   , expectation = Expect.true "5 in [5,)"
+                  }
+                , { desc = "just below inc lower bound"
+                  , bounds = ( Just 6, Nothing, Just ( Inc, Exc ) )
+                  , expectation = Expect.false "5 not in [6"
+                  }
+                , { desc = "same value as exc lower bound"
+                  , bounds = ( Just 5, Nothing, Just ( Exc, Exc ) )
+                  , expectation = Expect.false "5 not in (5,)"
+                  }
+                , { desc = "just below exc lower bound"
+                  , bounds = ( Just 6, Nothing, Just ( Exc, Exc ) )
+                  , expectation = Expect.false "5 not in (6,)"
                   }
                 ]
             )
