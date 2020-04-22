@@ -520,6 +520,101 @@ ce =
         ]
 
 
+ov : Test
+ov =
+    let
+        emptyRange =
+            Range.empty types.int
+
+        createRange lower upper =
+            Range.create types.float lower upper (Just ( Inc, Inc ))
+                |> Result.withDefault (Range.empty types.float)
+    in
+    describe "Overlap"
+        [ describe "empty ranges"
+            [ test "both empty ranges" <|
+                \_ ->
+                    Range.ov emptyRange emptyRange
+                        |> Expect.false "an empty range has no points"
+            , fuzzIntRange "first empty"
+                (Range.ov emptyRange
+                    >> Expect.false "an empty range has no points"
+                )
+            , fuzzIntRange "second empty"
+                (flip Range.ov emptyRange
+                    >> Expect.false "an empty range has no points"
+                )
+            ]
+        , fuzz Range.Fuzz.intRange "same range" <|
+            \r ->
+                Range.ov r r
+                    |> Expect.true "the same ranges overlaps"
+        , describe "infinite ranges"
+            [ fuzz Fuzz.float "lower inf range" <|
+                \i ->
+                    let
+                        infRange =
+                            createRange Nothing (Just i)
+
+                        finiteRange =
+                            createRange (Just i) (Just <| i + 10)
+                    in
+                    (Range.ov infRange finiteRange
+                        && Range.ov finiteRange infRange
+                    )
+                        |> Expect.true "finite range overlaps with infinite range"
+            , fuzz Fuzz.float "upper inf range" <|
+                \i ->
+                    let
+                        infRange =
+                            createRange (Just i) Nothing
+
+                        finiteRange =
+                            createRange (Just <| i - 10) (Just i)
+                    in
+                    (Range.ov infRange finiteRange
+                        && Range.ov finiteRange infRange
+                    )
+                        |> Expect.true "finite range overlaps with infinite range"
+            ]
+        , describe "finite ranges"
+            [ test "top-bottom overlap" <|
+                \_ ->
+                    let
+                        r1 =
+                            createRange (Just 1) (Just 10)
+
+                        r2 =
+                            createRange (Just 5) (Just 15)
+                    in
+                    (&&) (Range.ov r1 r2) (Range.ov r2 r1)
+                        |> Expect.true "overlaps"
+            , test "bottom-top overlap" <|
+                \_ ->
+                    let
+                        r1 =
+                            createRange (Just 5) (Just 15)
+
+                        r2 =
+                            createRange (Just 1) (Just 10)
+                    in
+                    (&&) (Range.ov r1 r2) (Range.ov r2 r1)
+                        |> Expect.true "overlaps"
+            , test "do not overlap" <|
+                \_ ->
+                    let
+                        r1 =
+                            createRange (Just 1) (Just 10)
+
+                        r2 =
+                            createRange (Just 15) (Just 20)
+                    in
+                    (&&) (Range.ov r1 r2) (Range.ov r2 r1)
+                        |> Expect.false "no overlap"
+            ]
+        ]
+
+
 
 -- Functions
 
