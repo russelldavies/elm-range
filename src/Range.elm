@@ -451,7 +451,7 @@ sr r1 r2 =
     in
     case ( r1.range, r2.range ) of
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
-            compareBounds compare ( upper1, UpperBound ) ( lower2, LowerBound ) == GT
+            compareBounds compare ( lower1, LowerBound ) ( upper2, UpperBound ) == GT
 
         _ ->
             False

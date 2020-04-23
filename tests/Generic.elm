@@ -615,6 +615,178 @@ ov =
         ]
 
 
+sl : Test
+sl =
+    let
+        emptyRange =
+            Range.empty types.int
+
+        createRange lower upper =
+            Range.create types.float lower upper (Just ( Inc, Inc ))
+                |> Result.withDefault (Range.empty types.float)
+    in
+    describe "stictly left of"
+        [ describe "empty ranges"
+            [ test "both empty ranges" <|
+                \_ ->
+                    Range.sl emptyRange emptyRange
+                        |> Expect.false "an empty range has no points"
+            , fuzzIntRange "first empty"
+                (Range.sl emptyRange
+                    >> Expect.false "an empty range has no points"
+                )
+            , fuzzIntRange "second empty"
+                (flip Range.sl emptyRange
+                    >> Expect.false "an empty range has no points"
+                )
+            ]
+        , fuzz Range.Fuzz.intRange "same range" <|
+            \r ->
+                Range.sl r r
+                    |> Expect.false "the same ranges is not strictly left of itself"
+        , describe "infinite ranges"
+            [ fuzz Fuzz.float "lower inf range" <|
+                \i ->
+                    let
+                        infRange =
+                            createRange Nothing (Just i)
+
+                        finiteRange =
+                            createRange (Just i) (Just <| i + 10)
+                    in
+                    (Range.sl infRange finiteRange
+                        && Range.sl finiteRange infRange
+                    )
+                        |> Expect.false "must be bounded"
+            , fuzz Fuzz.float "upper inf range" <|
+                \i ->
+                    let
+                        infRange =
+                            createRange (Just i) Nothing
+
+                        finiteRange =
+                            createRange (Just <| i - 10) (Just i)
+                    in
+                    (Range.sl infRange finiteRange
+                        && Range.sl finiteRange infRange
+                    )
+                        |> Expect.false "must be bounded"
+            ]
+        , describe "bounded ranges"
+            [ test "overlapping" <|
+                \_ ->
+                    Range.sl
+                        (createRange (Just 1) (Just 10))
+                        (createRange (Just 5) (Just 15))
+                        |> Expect.false "10 not < 5"
+            , test "far left of" <|
+                \_ ->
+                    Range.sl
+                        (createRange (Just 1) (Just 10))
+                        (createRange (Just 20) (Just 30))
+                        |> Expect.true "10 < 20"
+            , test "far right of" <|
+                \_ ->
+                    Range.sl
+                        (createRange (Just 20) (Just 30))
+                        (createRange (Just 1) (Just 10))
+                        |> Expect.false "30 not < 1"
+            , test "touching" <|
+                \_ ->
+                    Range.sl
+                        (createRange (Just 1) (Just 10))
+                        (createRange (Just 10) (Just 20))
+                        |> Expect.false "10 not < 10"
+            ]
+        ]
+
+
+sr : Test
+sr =
+    let
+        emptyRange =
+            Range.empty types.int
+
+        createRange lower upper =
+            Range.create types.float lower upper (Just ( Inc, Inc ))
+                |> Result.withDefault (Range.empty types.float)
+    in
+    describe "stictly right of"
+        [ describe "empty ranges"
+            [ test "both empty ranges" <|
+                \_ ->
+                    Range.sr emptyRange emptyRange
+                        |> Expect.false "an empty range has no points"
+            , fuzzIntRange "first empty"
+                (Range.sr emptyRange
+                    >> Expect.false "an empty range has no points"
+                )
+            , fuzzIntRange "second empty"
+                (flip Range.sr emptyRange
+                    >> Expect.false "an empty range has no points"
+                )
+            ]
+        , fuzz Range.Fuzz.intRange "same range" <|
+            \r ->
+                Range.sr r r
+                    |> Expect.false "the same ranges is not strictly right of itself"
+        , describe "infinite ranges"
+            [ fuzz Fuzz.float "lower inf range" <|
+                \i ->
+                    let
+                        infRange =
+                            createRange Nothing (Just i)
+
+                        finiteRange =
+                            createRange (Just i) (Just <| i + 10)
+                    in
+                    (Range.sr infRange finiteRange
+                        && Range.sr finiteRange infRange
+                    )
+                        |> Expect.false "must be bounded"
+            , fuzz Fuzz.float "upper inf range" <|
+                \i ->
+                    let
+                        infRange =
+                            createRange (Just i) Nothing
+
+                        finiteRange =
+                            createRange (Just <| i - 10) (Just i)
+                    in
+                    (Range.sr infRange finiteRange
+                        && Range.sr finiteRange infRange
+                    )
+                        |> Expect.false "must be bounded"
+            ]
+        , describe "bounded ranges"
+            [ test "overlapping" <|
+                \_ ->
+                    Range.sr
+                        (createRange (Just 1) (Just 10))
+                        (createRange (Just 5) (Just 15))
+                        |> Expect.false "10 not > 5"
+            , test "far left of" <|
+                \_ ->
+                    Range.sr
+                        (createRange (Just 1) (Just 10))
+                        (createRange (Just 20) (Just 30))
+                        |> Expect.false "10 not > 20"
+            , test "far right of" <|
+                \_ ->
+                    Range.sr
+                        (createRange (Just 20) (Just 30))
+                        (createRange (Just 1) (Just 10))
+                        |> Expect.true "30 > 1"
+            , test "touching" <|
+                \_ ->
+                    Range.sr
+                        (createRange (Just 10) (Just 20))
+                        (createRange (Just 1) (Just 10))
+                        |> Expect.false "10 not > 10"
+            ]
+        ]
+
+
 
 -- Functions
 
