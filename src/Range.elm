@@ -2,6 +2,7 @@ module Range exposing
     ( BoundFlag(..)
     , Range
     , TypeConfig
+    , adj
     , ce
     , cr
     , create
@@ -320,7 +321,30 @@ ge r1 r2 =
 -}
 cr : Range subtype -> Range subtype -> Bool
 cr r1 r2 =
-    contains r1.config r1.range r2.range
+    let
+        compare =
+            r1.config.compare
+    in
+    case ( r1.range, r2.range ) of
+        ( Empty, Empty ) ->
+            True
+
+        ( Empty, _ ) ->
+            False
+
+        ( _, Empty ) ->
+            True
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            let
+                lowerBoundOrder =
+                    compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound )
+
+                upperBoundOrder =
+                    compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound )
+            in
+            -- lower1 <= lower2 and upper1 >= upper2
+            lowerBoundOrder /= GT && upperBoundOrder /= LT
 
 
 {-| Contains Element
@@ -473,7 +497,8 @@ nxr r1 r2 =
     in
     case ( r1.range, r2.range ) of
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
-            compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound ) == GT
+            -- upper1 <= upper2
+            compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound ) /= GT
 
         _ ->
             False
@@ -495,7 +520,8 @@ nxl r1 r2 =
     in
     case ( r1.range, r2.range ) of
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
-            compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound ) == LT
+            -- lower1 >= lower2
+            compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound ) /= LT
 
         _ ->
             False
@@ -511,16 +537,32 @@ nxl r1 r2 =
 -}
 adj : Range subtype -> Range subtype -> Bool
 adj r1 r2 =
-    let
-        compare =
-            r1.config.compare
-    in
-    case ( r1.range, r2.range ) of
-        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
-            compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound ) == LT
+    {-
 
-        _ ->
+       Given two ranges A..B and C..D, the ranges are adjacent if and only if
+        B is adjacent to C, or D is adjacent to A.
+
+    -}
+    case ( r1.range, r2.range ) of
+        -- An empty range is not adjacent to any other range
+        ( Empty, Empty ) ->
             False
+
+        ( Empty, _ ) ->
+            False
+
+        ( _, Empty ) ->
+            False
+
+        {- Given two ranges A..B and C..D, the ranges are adjacent if and only if B
+           is adjacent to C, or D is adjacent to A.
+        -}
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            let
+                config =
+                    r1.config
+            in
+            boundsAdjacent config upper1 lower2 || boundsAdjacent config upper2 lower1
 
 
 
@@ -795,6 +837,7 @@ flagToBound flag =
             Exclusive
 
 
+boundToValFlag : Bound subtype -> ( Maybe subtype, BoundFlag )
 boundToValFlag bound =
     case bound of
         Exclusive val ->
@@ -984,6 +1027,59 @@ compareBounds compare ( bound1, bound1Type ) ( bound2, bound2Type ) =
             compare bound1Val bound2Val
 
 
+{-| Similar to `compareBounds` but simpler as we just compare the values
+held in the bounds, ignoring inclusive/exclusive flags. The lower/upper flags
+only mater for infinities, where they tell us if the infinity is plus or minus.
+-}
+compareBoundValues :
+    (subtype -> subtype -> Order)
+    -> ( Bound subtype, BoundType )
+    -> ( Bound subtype, BoundType )
+    -> Order
+compareBoundValues compare ( bound1, bound1Type ) ( bound2, bound2Type ) =
+    case ( bound1, bound2 ) of
+        -- Both infinity, so they are equal unless one is lower and other not
+        ( Infinite, Infinite ) ->
+            case ( bound1Type, bound2Type ) of
+                ( LowerBound, LowerBound ) ->
+                    EQ
+
+                ( UpperBound, UpperBound ) ->
+                    EQ
+
+                ( LowerBound, UpperBound ) ->
+                    LT
+
+                ( UpperBound, LowerBound ) ->
+                    GT
+
+        ( Infinite, _ ) ->
+            if bound1Type == LowerBound then
+                LT
+
+            else
+                GT
+
+        ( _, Infinite ) ->
+            if bound2Type == UpperBound then
+                LT
+
+            else
+                GT
+
+        ( Exclusive bound1Val, Exclusive bound2Val ) ->
+            compare bound1Val bound2Val
+
+        ( Exclusive bound1Val, Inclusive bound2Val ) ->
+            compare bound1Val bound2Val
+
+        ( Inclusive bound1Val, Exclusive bound2Val ) ->
+            compare bound1Val bound2Val
+
+        ( Inclusive bound1Val, Inclusive bound2Val ) ->
+            compare bound1Val bound2Val
+
+
 rangeCompare : TypeConfig subtype -> RangeInternal subtype -> RangeInternal subtype -> Order
 rangeCompare { compare } r1 r2 =
     case ( r1, r2 ) of
@@ -1011,25 +1107,86 @@ rangeCompare { compare } r1 r2 =
                 lowerBoundOrder
 
 
-contains : TypeConfig subtype -> RangeInternal subtype -> RangeInternal subtype -> Bool
-contains { compare } r1 r2 =
-    case ( r1, r2 ) of
-        ( Empty, Empty ) ->
-            True
 
-        ( Empty, _ ) ->
+{- Check if two bounds A and B are "adjacent", where A is an upper bound and B
+   is a lower bound. For the bounds to be adjacent, each subtype value must
+   satisfy strictly one of the bounds: there are no values which satisfy both
+   bounds (i.e. less than A and greater than B); and there are no values which
+   satisfy neither bound (i.e. greater than A and less than B).
+
+   For discrete ranges, we rely on the canonicalization function to see if A..B
+   normalizes to empty. (If there is no canonicalization function, it's impossible
+   for such a range to normalize to empty, so we needn't bother to try.)
+
+   If A == B, the ranges are adjacent only if the bounds have different inclusive
+   flags (i.e., exactly one of the ranges includes the common boundary point).
+
+   And if A > B then the ranges are not adjacent in this order.
+
+-}
+
+
+boundsAdjacent :
+    TypeConfig subtype
+    -> Bound subtype
+    -> Bound subtype
+    -> Bool
+boundsAdjacent config boundA boundB =
+    case compareBoundValues config.compare ( boundA, UpperBound ) ( boundB, LowerBound ) of
+        -- Bounds don't overlap; see if there are points in between
+        LT ->
+            if config.canonical == Nothing then
+                -- In a continuous subtype, there are assumed to be points between
+                False
+
+            else
+                -- The bounds are of a discrete range type; so make a range
+                -- A..B and see if it's empty
+                let
+                    ( boundAVal, boundAFlag ) =
+                        boundToValFlag boundA
+
+                    ( boundBVal, boundBFlag ) =
+                        boundToValFlag boundB
+                in
+                make config
+                    ( boundAVal
+                    , boundBVal
+                    , ( flipBoundFlag boundAFlag, flipBoundFlag boundBFlag )
+                    )
+                    |> Result.map
+                        (\r ->
+                            case r of
+                                Bounded _ ->
+                                    False
+
+                                Empty ->
+                                    True
+                        )
+                    |> Result.withDefault False
+
+        EQ ->
+            isBoundInclusive boundA /= isBoundInclusive boundB
+
+        -- Bounds overlap
+        GT ->
             False
 
-        ( _, Empty ) ->
+
+isBoundInclusive bound =
+    case bound of
+        Inclusive _ ->
             True
 
-        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
-            let
-                lowerBoundOrder =
-                    compareBounds compare ( lower1, LowerBound ) ( lower2, LowerBound )
+        _ ->
+            False
 
-                upperBoundOrder =
-                    compareBounds compare ( upper1, UpperBound ) ( upper2, UpperBound )
-            in
-            -- lower1 <= lower2 and upper1 >= upper2
-            lowerBoundOrder /= GT && upperBoundOrder /= LT
+
+flipBoundFlag : BoundFlag -> BoundFlag
+flipBoundFlag flag =
+    case flag of
+        Inc ->
+            Exc
+
+        Exc ->
+            Inc
