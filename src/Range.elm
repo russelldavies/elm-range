@@ -571,9 +571,10 @@ adj r1 r2 =
 {-| Union
 
     -- Ok "[5,20)"
-    Result.map2 (Range.adj >> Range.toString)
+    Result.map2 Range.adj
         (Range.create Range.types.float (Just 5) (Just 15) Nothing)
         (Range.create Range.types.float (Just 10) (Just 20) Nothing)
+        |> Result.map Range.toString
 
 -}
 union : Range subtype -> Range subtype -> Result String (Range subtype)
@@ -626,9 +627,10 @@ union r1 r2 =
 {-| Intersection
 
     -- Ok [10,15)
-    Result.map2 (Range.intersect >> Range.toString)
+    Result.map2 Range.intersect
         (Range.create Range.types.float (Just 5) (Just 15) Nothing)
         (Range.create Range.types.float (Just 10) (Just 20) Nothing)
+        |> Result.map Range.toString
 
 -}
 intersect : Range subtype -> Range subtype -> Range subtype
@@ -681,9 +683,10 @@ intersect r1 r2 =
 {-| Difference
 
     -- Ok [5,10)
-    Result.map2 (Range.intersect >> Range.toString)
+    Result.map2 Range.intersect
         (Range.create Range.types.float (Just 5) (Just 15) Nothing)
         (Range.create Range.types.float (Just 10) (Just 20) Nothing)
+        |> Result.toString
 
 -}
 diff : Range subtype -> Range subtype -> Result String (Range subtype)
