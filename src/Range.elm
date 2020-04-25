@@ -826,6 +826,11 @@ upperBoundInfinite range =
             False
 
 
+{-| The smallest range which includes both of the given ranges.
+
+Like set union, except also allow and account for non-adjacent input ranges.
+
+-}
 merge : Range subtype -> Range subtype -> Range subtype
 merge range1 range2 =
     let

@@ -1260,6 +1260,33 @@ isEmpty =
 
 
 
+-- FUNCTIONS
+
+
+merge : Test
+merge =
+    let
+        floatRange a b =
+            Range.create types.float (Just a) (Just b) Nothing
+                |> Result.withDefault (Range.empty types.float)
+    in
+    describe "merge function"
+        [ test "adjacent" <|
+            \_ ->
+                Range.merge (floatRange 1 2) (floatRange 2 3)
+                    |> Expect.equal (floatRange 1 3)
+        , test "overlapping" <|
+            \_ ->
+                Range.merge (floatRange 1 2) (floatRange 1.5 3)
+                    |> Expect.equal (floatRange 1 3)
+        , test "non-contiguous" <|
+            \_ ->
+                Range.merge (floatRange 1 2) (floatRange 2.5 3)
+                    |> Expect.equal (floatRange 1 3)
+        ]
+
+
+
 -- HELPERS
 
 
