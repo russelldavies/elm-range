@@ -28,6 +28,7 @@ module Range exposing
     , sr
     , toString
     , types
+    , union
     , upperBoundInclusive
     , upperBoundInfinite
     , upperElement
@@ -563,6 +564,61 @@ adj r1 r2 =
                     r1.config
             in
             boundsAdjacent config upper1 lower2 || boundsAdjacent config upper2 lower1
+
+
+{-| Union
+
+    -- Ok "[5,20)"
+    Result.map2 (Range.adj >> Range.toString)
+        (Range.create Range.types.float (Just 5) (Just 15) Nothing)
+        (Range.create Range.types.float (Just 10) (Just 20) Nothing)
+
+-}
+union : Range subtype -> Range subtype -> Result String (Range subtype)
+union r1 r2 =
+    let
+        config =
+            r1.config
+    in
+    case ( r1.range, r2.range ) of
+        -- If either is empty then the other is the correct answer
+        ( Empty, Empty ) ->
+            Ok r1
+
+        ( Empty, _ ) ->
+            Ok r2
+
+        ( _, Empty ) ->
+            Ok r1
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            if not (ov r1 r2) && not (adj r1 r2) then
+                Err "Result of range union would not be contiguous"
+
+            else
+                let
+                    ( lowerVal, lowerFlag ) =
+                        boundToValFlag
+                            (case compareBounds config.compare ( lower1, LowerBound ) ( lower2, LowerBound ) of
+                                LT ->
+                                    lower1
+
+                                _ ->
+                                    lower2
+                            )
+
+                    ( upperVal, upperFlag ) =
+                        boundToValFlag
+                            (case compareBounds config.compare ( upper1, UpperBound ) ( upper2, UpperBound ) of
+                                GT ->
+                                    upper1
+
+                                _ ->
+                                    upper2
+                            )
+                in
+                make config ( lowerVal, upperVal, ( lowerFlag, upperFlag ) )
+                    |> Result.map (Range config)
 
 
 

@@ -1039,6 +1039,62 @@ adj =
         ]
 
 
+union : Test
+union =
+    let
+        floatRange lower upper =
+            Range.create types.float lower upper Nothing
+                |> Result.withDefault (Range.empty types.float)
+    in
+    describe "union"
+        [ fuzz Range.Fuzz.floatRange "empty and bounded range" <|
+            \r ->
+                r
+                    |> Range.union (Range.empty types.float)
+                    |> Result.map (Expect.equal r)
+                    |> resultFailErr
+        , test "adjacent ranges" <|
+            \_ ->
+                let
+                    expected =
+                        floatRange (Just 1) (Just 3)
+                in
+                Range.union
+                    (floatRange (Just 1) (Just 2))
+                    (floatRange (Just 2) (Just 3))
+                    |> Result.map (Expect.equal expected)
+                    |> resultFailErr
+        , test "overlapping" <|
+            \_ ->
+                let
+                    expected =
+                        floatRange (Just 1) (Just 3)
+                in
+                Range.union
+                    (floatRange (Just 1) (Just 2))
+                    (floatRange (Just 1.5) (Just 3))
+                    |> Result.map (Expect.equal expected)
+                    |> resultFailErr
+        , test "non-contiguous" <|
+            \_ ->
+                let
+                    error =
+                        "Result of range union would not be contiguous"
+
+                    output =
+                        Range.union
+                            (floatRange (Just 1) (Just 2))
+                            (floatRange (Just 2.5) (Just 3))
+                in
+                case output of
+                    Ok _ ->
+                        Expect.fail "invalid"
+
+                    Err err ->
+                        Expect.equal error err
+        ]
+
+
 
 -- Functions
 
