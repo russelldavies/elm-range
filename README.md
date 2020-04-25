@@ -3,17 +3,9 @@
 Model and operate on a range of values in Elm.
 
 ```elm
-> range1 = (Range.Int.fromString "[1,5]")
-Ok (Bounded (Inclusive 1,Exclusive 6))
-    : Result (List Parser.DeadEnd) (Range.Range Int)
-
-> range2 = (Range.Int.fromString "(4,10]")
-Ok (Bounded (Inclusive 5,Exclusive 11))
-    : Result (List Parser.DeadEnd) (Range.Range Int)
-
-> Result.map2 Range.Int.merge range1 range2
-Ok (Bounded (Inclusive 1,Exclusive 11))
-    : Result (List Parser.DeadEnd) (Range.Range Int)
+> range1 = (Range.fromString Range.types.int "[1,5]")
+> range2 = (Range.fromString Range.types.int "(4,10]")
+> Result.map2 Range.merge range1 range2 |> Result.map Range.toString -- Ok "[1,11)"
 ```
 
 ## Overview
@@ -34,3 +26,10 @@ Types](https://www.postgresql.org/docs/current/rangetypes.html):
 > clearly. The use of time and date ranges for scheduling purposes is the
 > clearest example; but price ranges, measurement ranges from an instrument,
 > and so forth can also be useful.
+
+## Usage
+
+When creating a range, either from a string or directly from values, you will
+need to specify a type. This library provides a few for `Int`, `Float`,
+`String`, and `Time.Posix` in the `Range.types` record. If you need a custom
+one, you will need to write your own `TypeConfig` (essentially a typeclass).
