@@ -1095,6 +1095,46 @@ union =
         ]
 
 
+intersect =
+    let
+        floatRange lower upper =
+            Range.create types.float lower upper Nothing
+                |> Result.withDefault (Range.empty types.float)
+
+        emptyRange =
+            Range.empty types.float
+    in
+    describe "intersect"
+        [ fuzz Range.Fuzz.floatRange "empty and bounded range" <|
+            \r ->
+                r
+                    |> Range.intersect emptyRange
+                    |> Expect.equal emptyRange
+        , test "adjacent ranges" <|
+            \_ ->
+                Range.intersect
+                    (floatRange (Just 1) (Just 2))
+                    (floatRange (Just 2) (Just 3))
+                    |> Expect.equal emptyRange
+        , test "overlapping" <|
+            \_ ->
+                let
+                    expected =
+                        floatRange (Just 1.5) (Just 2)
+                in
+                Range.intersect
+                    (floatRange (Just 1) (Just 2))
+                    (floatRange (Just 1.5) (Just 3))
+                    |> Expect.equal expected
+        , test "non-contiguous" <|
+            \_ ->
+                Range.intersect
+                    (floatRange (Just 1) (Just 2))
+                    (floatRange (Just 2.5) (Just 3))
+                    |> Expect.equal emptyRange
+        ]
+
+
 
 -- Functions
 

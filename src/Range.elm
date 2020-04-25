@@ -13,6 +13,7 @@ module Range exposing
     , fromString
     , ge
     , gt
+    , intersect
     , isEmpty
     , le
     , lowerBoundInclusive
@@ -619,6 +620,61 @@ union r1 r2 =
                 in
                 make config ( lowerVal, upperVal, ( lowerFlag, upperFlag ) )
                     |> Result.map (Range config)
+
+
+{-| Intersection
+
+    -- Ok [10,15)
+    Result.map2 (Range.intersect >> Range.toString)
+        (Range.create Range.types.float (Just 5) (Just 15) Nothing)
+        (Range.create Range.types.float (Just 10) (Just 20) Nothing)
+
+-}
+intersect : Range subtype -> Range subtype -> Range subtype
+intersect r1 r2 =
+    let
+        config =
+            r1.config
+    in
+    case ( r1.range, r2.range ) of
+        ( Empty, Empty ) ->
+            empty config
+
+        ( Empty, _ ) ->
+            empty config
+
+        ( _, Empty ) ->
+            empty config
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            if not (ov r1 r2) then
+                empty config
+
+            else
+                let
+                    ( lowerVal, lowerFlag ) =
+                        boundToValFlag
+                            (case compareBounds config.compare ( lower1, LowerBound ) ( lower2, LowerBound ) of
+                                LT ->
+                                    lower2
+
+                                _ ->
+                                    lower1
+                            )
+
+                    ( upperVal, upperFlag ) =
+                        boundToValFlag
+                            (case compareBounds config.compare ( upper1, UpperBound ) ( upper2, UpperBound ) of
+                                GT ->
+                                    upper2
+
+                                _ ->
+                                    upper1
+                            )
+                in
+                make config ( lowerVal, upperVal, ( lowerFlag, upperFlag ) )
+                    |> Result.map (Range config)
+                    |> Result.withDefault (empty config)
 
 
 
