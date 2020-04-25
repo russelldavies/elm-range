@@ -1105,10 +1105,19 @@ intersect =
             Range.empty types.float
     in
     describe "intersect"
-        [ fuzz Range.Fuzz.floatRange "empty and bounded range" <|
+        [ test "two empty ranges" <|
+            \_ ->
+                Range.intersect emptyRange emptyRange
+                    |> Expect.equal emptyRange
+        , fuzz Range.Fuzz.floatRange "empty and bounded range" <|
             \r ->
                 r
                     |> Range.intersect emptyRange
+                    |> Expect.equal emptyRange
+        , fuzz Range.Fuzz.floatRange "bounded and empty range" <|
+            \r ->
+                r
+                    |> flip Range.intersect emptyRange
                     |> Expect.equal emptyRange
         , test "adjacent ranges" <|
             \_ ->
@@ -1132,6 +1141,86 @@ intersect =
                     (floatRange (Just 1) (Just 2))
                     (floatRange (Just 2.5) (Just 3))
                     |> Expect.equal emptyRange
+        ]
+
+
+diff : Test
+diff =
+    let
+        floatRange lower upper flags =
+            Range.create types.float lower upper flags
+                |> Result.withDefault (Range.empty types.float)
+
+        emptyRange =
+            Range.empty types.float
+    in
+    describe "difference"
+        [ test "two empty ranges" <|
+            \_ ->
+                Range.diff emptyRange emptyRange
+                    |> Result.map (Expect.equal emptyRange)
+                    |> resultFailErr
+        , fuzz Range.Fuzz.floatRange "empty and bounded range" <|
+            Range.diff emptyRange
+                >> Result.map (Expect.equal emptyRange)
+                >> resultFailErr
+        , fuzz Range.Fuzz.floatRange "bounded and empty range" <|
+            \r ->
+                r
+                    |> flip Range.diff emptyRange
+                    |> Result.map (Expect.equal r)
+                    |> resultFailErr
+        , test "overlapping" <|
+            \_ ->
+                let
+                    expected =
+                        floatRange (Just 1.1) (Just 2.0) Nothing
+                in
+                Range.diff
+                    (floatRange (Just 1.1) (Just 2.2) Nothing)
+                    (floatRange (Just 2) (Just 3) Nothing)
+                    |> Result.map (Expect.equal expected)
+                    |> resultFailErr
+        , test "adjacent" <|
+            \_ ->
+                let
+                    expected =
+                        floatRange (Just 1.1) (Just 2.2) Nothing
+                in
+                Range.diff
+                    (floatRange (Just 1.1) (Just 2.2) Nothing)
+                    (floatRange (Just 2.2) (Just 3) Nothing)
+                    |> Result.map (Expect.equal expected)
+                    |> resultFailErr
+        , test "overlapping, custom flags" <|
+            \_ ->
+                let
+                    expected =
+                        floatRange (Just 1.1) (Just 2.0) Nothing
+                in
+                Range.diff
+                    (floatRange (Just 1.1) (Just 2.2) (Just ( Inc, Inc )))
+                    (floatRange (Just 2) (Just 3) Nothing)
+                    |> Result.map (Expect.equal expected)
+                    |> resultFailErr
+        , test "non-contiguous, custom flags" <|
+            \_ ->
+                let
+                    expected =
+                        floatRange (Just 10.1) (Just 12.2) (Just ( Inc, Inc ))
+                in
+                Range.diff
+                    (floatRange (Just 10.1) (Just 12.2) (Just ( Inc, Inc )))
+                    (floatRange (Just 110) (Just 120.2) (Just ( Exc, Inc )))
+                    |> Result.map (Expect.equal expected)
+                    |> resultFailErr
+        , test "contained within, custom flags" <|
+            \_ ->
+                Range.diff
+                    (floatRange (Just 10.1) (Just 12.2) (Just ( Inc, Inc )))
+                    (floatRange (Just 0) (Just 120.2) (Just ( Exc, Inc )))
+                    |> Result.map (Expect.equal emptyRange)
+                    |> resultFailErr
         ]
 
 

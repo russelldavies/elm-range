@@ -7,6 +7,7 @@ module Range exposing
     , cr
     , create
     , decoder
+    , diff
     , empty
     , encode
     , eq
@@ -675,6 +676,80 @@ intersect r1 r2 =
                 make config ( lowerVal, upperVal, ( lowerFlag, upperFlag ) )
                     |> Result.map (Range config)
                     |> Result.withDefault (empty config)
+
+
+{-| Difference
+
+    -- Ok [5,10)
+    Result.map2 (Range.intersect >> Range.toString)
+        (Range.create Range.types.float (Just 5) (Just 15) Nothing)
+        (Range.create Range.types.float (Just 10) (Just 20) Nothing)
+
+-}
+diff : Range subtype -> Range subtype -> Result String (Range subtype)
+diff r1 r2 =
+    let
+        config =
+            r1.config
+    in
+    case ( r1.range, r2.range ) of
+        -- If either is empty, r1 is the correct answer
+        ( Empty, Empty ) ->
+            Ok r1
+
+        ( Empty, _ ) ->
+            Ok r1
+
+        ( _, Empty ) ->
+            Ok r1
+
+        ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
+            let
+                l1l2 =
+                    compareBounds config.compare ( lower1, LowerBound ) ( lower2, LowerBound )
+
+                l1u2 =
+                    compareBounds config.compare ( lower1, LowerBound ) ( upper2, UpperBound )
+
+                u1l2 =
+                    compareBounds config.compare ( upper1, UpperBound ) ( lower2, LowerBound )
+
+                u1u2 =
+                    compareBounds config.compare ( upper1, UpperBound ) ( upper2, UpperBound )
+            in
+            if l1l2 == LT && u1u2 == GT then
+                Err "Result of range difference would not be contiguous"
+
+            else if l1u2 == GT || u1l2 == LT then
+                Ok r1
+
+            else if l1l2 /= LT && u1u2 /= GT then
+                Ok (empty config)
+
+            else if l1l2 /= GT && u1l2 /= LT && u1u2 /= GT then
+                let
+                    ( lowerVal, lowerFlag ) =
+                        boundToValFlag lower1
+
+                    ( upperVal, upperFlag ) =
+                        boundToValFlag lower2
+                in
+                make config ( lowerVal, upperVal, ( lowerFlag, flipBoundFlag upperFlag ) )
+                    |> Result.map (Range config)
+
+            else if l1l2 /= LT && u1u2 /= LT && l1u2 /= GT then
+                let
+                    ( lowerVal, lowerFlag ) =
+                        boundToValFlag upper2
+
+                    ( upperVal, upperFlag ) =
+                        boundToValFlag upper1
+                in
+                make config ( lowerVal, upperVal, ( flipBoundFlag lowerFlag, upperFlag ) )
+                    |> Result.map (Range config)
+
+            else
+                Err "unexpected case"
 
 
 
