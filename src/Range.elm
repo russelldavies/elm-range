@@ -537,12 +537,6 @@ nxl r1 r2 =
 -}
 adj : Range subtype -> Range subtype -> Bool
 adj r1 r2 =
-    {-
-
-       Given two ranges A..B and C..D, the ranges are adjacent if and only if
-        B is adjacent to C, or D is adjacent to A.
-
-    -}
     case ( r1.range, r2.range ) of
         -- An empty range is not adjacent to any other range
         ( Empty, Empty ) ->
@@ -554,8 +548,14 @@ adj r1 r2 =
         ( _, Empty ) ->
             False
 
-        {- Given two ranges A..B and C..D, the ranges are adjacent if and only if B
-           is adjacent to C, or D is adjacent to A.
+        {- Given two ranges A..B and C..D, the ranges are adjacent if and only
+           if B is adjacent to C, or D is adjacent to A.
+
+           A..B
+             -|-
+              C..D
+                -|-
+                 A..B
         -}
         ( Bounded ( lower1, upper1 ), Bounded ( lower2, upper2 ) ) ->
             let
@@ -1107,25 +1107,23 @@ rangeCompare { compare } r1 r2 =
                 lowerBoundOrder
 
 
+{-| Check if two bounds A and B are "adjacent", where A is an upper bound and B
+is a lower bound. For the bounds to be adjacent, each subtype value must
+satisfy strictly one of the bounds: there are no values which satisfy both
+bounds (i.e. less than A and greater than B); and there are no values which
+satisfy neither bound (i.e. greater than A and less than B).
 
-{- Check if two bounds A and B are "adjacent", where A is an upper bound and B
-   is a lower bound. For the bounds to be adjacent, each subtype value must
-   satisfy strictly one of the bounds: there are no values which satisfy both
-   bounds (i.e. less than A and greater than B); and there are no values which
-   satisfy neither bound (i.e. greater than A and less than B).
+For discrete ranges, we rely on the canonicalization function to see if A..B
+normalizes to empty. (If there is no canonicalization function, it's impossible
+for such a range to normalize to empty, so we needn't bother to try.)
 
-   For discrete ranges, we rely on the canonicalization function to see if A..B
-   normalizes to empty. (If there is no canonicalization function, it's impossible
-   for such a range to normalize to empty, so we needn't bother to try.)
+If A == B, the ranges are adjacent only if the bounds have different flags
+(incluisve, exclusive); i.e., exactly one of the ranges includes the common
+boundary point.
 
-   If A == B, the ranges are adjacent only if the bounds have different inclusive
-   flags (i.e., exactly one of the ranges includes the common boundary point).
-
-   And if A > B then the ranges are not adjacent in this order.
+And if A > B then the ranges are not adjacent in this order.
 
 -}
-
-
 boundsAdjacent :
     TypeConfig subtype
     -> Bound subtype

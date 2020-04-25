@@ -959,6 +959,86 @@ nxl =
         ]
 
 
+adj : Test
+adj =
+    let
+        emptyRange =
+            Range.empty types.int
+
+        floatRange lower upper bounds =
+            Range.create types.float lower upper bounds
+                |> Result.withDefault (Range.empty types.float)
+
+        intRange lower upper =
+            Range.create types.int lower upper Nothing
+                |> Result.withDefault (Range.empty types.int)
+    in
+    describe "is adjacent to"
+        [ describe "empty ranges"
+            [ test "both empty ranges" <|
+                \_ ->
+                    Range.adj emptyRange emptyRange
+                        |> Expect.false "an empty range has no points"
+            , fuzzIntRange "first empty"
+                (Range.adj emptyRange
+                    >> Expect.false "an empty range has no points"
+                )
+            , fuzzIntRange "second empty"
+                (flip Range.adj emptyRange
+                    >> Expect.false "an empty range has no points"
+                )
+            ]
+        , fuzz Range.Fuzz.intRange "same range" <|
+            \r ->
+                Range.adj r r
+                    |> Expect.false "bounds overlay each other not adjacent"
+        , describe "bounded ranges"
+            [ test "B..C less than, continuous subtype" <|
+                \_ ->
+                    Range.adj
+                        (floatRange (Just 2) (Just 3) Nothing)
+                        (floatRange (Just 3.1) Nothing Nothing)
+                        |> Expect.false "3 < 3.1"
+            , test "B..C less than, discrete subtype" <|
+                \_ ->
+                    Range.adj
+                        (intRange (Just 1) (Just 5))
+                        (intRange (Just 6) Nothing)
+                        |> Expect.false "3 < 3.1"
+            , test "B..C equal, different flags" <|
+                \_ ->
+                    Range.adj
+                        (floatRange (Just 2) (Just 3) (Just ( Inc, Inc )))
+                        (floatRange (Just 3) (Just 4) (Just ( Exc, Exc )))
+                        |> Expect.true "3 == 3 and Inc /= Exc"
+            , test "B..C equal, same flags" <|
+                \_ ->
+                    Range.adj
+                        (floatRange (Just 1) (Just 5) (Just ( Inc, Inc )))
+                        (floatRange (Just 5) (Just 10) (Just ( Inc, Inc )))
+                        |> Expect.false "5 == 3 but Inc == Inc"
+            , test "D..A equal, different flags" <|
+                \_ ->
+                    Range.adj
+                        (floatRange (Just 5) (Just 10) (Just ( Inc, Exc )))
+                        (floatRange (Just 1) (Just 5) (Just ( Inc, Exc )))
+                        |> Expect.true "5 == 5 and Exc /= Inc"
+            , test "D..A equal, same flags" <|
+                \_ ->
+                    Range.adj
+                        (floatRange (Just 5) (Just 10) (Just ( Inc, Inc )))
+                        (floatRange (Just 1) (Just 5) (Just ( Inc, Inc )))
+                        |> Expect.false "5 == 5 but Inc == Inc"
+            , test "both bounds overlap" <|
+                \_ ->
+                    Range.adj
+                        (floatRange (Just 1) (Just 5) Nothing)
+                        (floatRange (Just 3) (Just 4) Nothing)
+                        |> Expect.false "5 > 3 and 4 > 1"
+            ]
+        ]
+
+
 
 -- Functions
 
