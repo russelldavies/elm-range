@@ -20,7 +20,7 @@ checkBounds =
     in
     fuzz floatPair "Check range bounds: lower must be less than or equal to upper" <|
         \( lower, upper ) ->
-            case Range.create types.float (Just lower) (Just upper) Nothing of
+            case Range.create types.float (Just lower) (Just upper) of
                 Ok range ->
                     case compare lower upper of
                         LT ->
@@ -184,7 +184,7 @@ lt =
             Range.empty types.int
 
         create l u =
-            Range.create types.int l u Nothing |> Result.withDefault emptyRange
+            Range.create types.int l u |> Result.withDefault emptyRange
     in
     describe "less than"
         [ test "both empty" <|
@@ -281,7 +281,7 @@ gt =
             Range.empty types.int
 
         create l u =
-            Range.create types.int l u Nothing |> Result.withDefault emptyRange
+            Range.create types.int l u |> Result.withDefault emptyRange
     in
     describe "greater than"
         [ test "both empty" <|
@@ -428,7 +428,7 @@ ce =
             in
             test desc <|
                 \_ ->
-                    Range.create types.float lower upper flags
+                    Range.createWith types.float lower upper flags
                         |> Result.map (flip Range.ce 5 >> expectation)
                         |> resultFailErr
     in
@@ -527,7 +527,7 @@ ov =
             Range.empty types.int
 
         createRange lower upper =
-            Range.create types.float lower upper (Just ( Inc, Inc ))
+            Range.createWith types.float lower upper (Just ( Inc, Inc ))
                 |> Result.withDefault (Range.empty types.float)
     in
     describe "Overlap"
@@ -622,7 +622,7 @@ sl =
             Range.empty types.int
 
         createRange lower upper =
-            Range.create types.float lower upper (Just ( Inc, Inc ))
+            Range.createWith types.float lower upper (Just ( Inc, Inc ))
                 |> Result.withDefault (Range.empty types.float)
     in
     describe "stictly left of"
@@ -708,7 +708,7 @@ sr =
             Range.empty types.int
 
         createRange lower upper =
-            Range.create types.float lower upper (Just ( Inc, Inc ))
+            Range.createWith types.float lower upper (Just ( Inc, Inc ))
                 |> Result.withDefault (Range.empty types.float)
     in
     describe "stictly right of"
@@ -794,7 +794,7 @@ nxr =
             Range.empty types.int
 
         createRange lower upper =
-            Range.create types.float lower upper (Just ( Inc, Inc ))
+            Range.createWith types.float lower upper (Just ( Inc, Inc ))
                 |> Result.withDefault (Range.empty types.float)
     in
     describe "does not extend to the right of"
@@ -880,7 +880,7 @@ nxl =
             Range.empty types.int
 
         createRange lower upper =
-            Range.create types.float lower upper (Just ( Inc, Inc ))
+            Range.createWith types.float lower upper (Just ( Inc, Inc ))
                 |> Result.withDefault (Range.empty types.float)
     in
     describe "does not extend to the left of"
@@ -966,11 +966,11 @@ adj =
             Range.empty types.int
 
         floatRange lower upper bounds =
-            Range.create types.float lower upper bounds
+            Range.createWith types.float lower upper bounds
                 |> Result.withDefault (Range.empty types.float)
 
         intRange lower upper =
-            Range.create types.int lower upper Nothing
+            Range.create types.int lower upper
                 |> Result.withDefault (Range.empty types.int)
     in
     describe "is adjacent to"
@@ -1043,7 +1043,7 @@ union : Test
 union =
     let
         floatRange lower upper =
-            Range.create types.float lower upper Nothing
+            Range.create types.float lower upper
                 |> Result.withDefault (Range.empty types.float)
     in
     describe "union"
@@ -1098,7 +1098,7 @@ union =
 intersect =
     let
         floatRange lower upper =
-            Range.create types.float lower upper Nothing
+            Range.create types.float lower upper
                 |> Result.withDefault (Range.empty types.float)
 
         emptyRange =
@@ -1148,7 +1148,7 @@ diff : Test
 diff =
     let
         floatRange lower upper flags =
-            Range.create types.float lower upper flags
+            Range.createWith types.float lower upper flags
                 |> Result.withDefault (Range.empty types.float)
 
         emptyRange =
@@ -1232,7 +1232,7 @@ isEmpty : Test
 isEmpty =
     let
         createRange bounds =
-            Range.create types.int (Just 1) (Just 1) (Just bounds)
+            Range.createWith types.int (Just 1) (Just 1) (Just bounds)
                 |> Result.map Range.isEmpty
     in
     describe "isEmpty"
@@ -1267,7 +1267,7 @@ merge : Test
 merge =
     let
         floatRange a b =
-            Range.create types.float (Just a) (Just b) Nothing
+            Range.create types.float (Just a) (Just b)
                 |> Result.withDefault (Range.empty types.float)
     in
     describe "merge function"

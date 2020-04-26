@@ -16,7 +16,7 @@ intRange : Fuzzer (Range Int)
 intRange =
     Fuzz.map
         (\( lowerBound, upperBound ) ->
-            Range.create types.int lowerBound upperBound Nothing
+            Range.create types.int lowerBound upperBound
                 |> Result.withDefault (Range.empty types.int)
         )
         (validMaybeNumPair Random.int)
@@ -28,7 +28,7 @@ intRangeFinite : Fuzzer (Range Int)
 intRangeFinite =
     Fuzz.map
         (\( lowerBound, upperBound ) ->
-            Range.create types.int (Just lowerBound) (Just upperBound) Nothing
+            Range.create types.int (Just lowerBound) (Just upperBound)
                 |> Result.withDefault (Range.empty types.int)
         )
         (validNumPair Random.int)
@@ -40,7 +40,7 @@ floatRange : Fuzzer (Range Float)
 floatRange =
     Fuzz.map2
         (\( lowerBound, upperBound ) flags ->
-            Range.create types.float lowerBound upperBound (Just flags)
+            Range.createWith types.float lowerBound upperBound (Just flags)
                 |> Result.withDefault (Range.empty types.float)
         )
         (validMaybeNumPair Random.float)
@@ -53,7 +53,7 @@ floatRangeFinite : Fuzzer (Range Float)
 floatRangeFinite =
     Fuzz.map
         (\( lowerBound, upperBound ) ->
-            Range.create types.float (Just lowerBound) (Just upperBound) Nothing
+            Range.create types.float (Just lowerBound) (Just upperBound)
                 |> Result.withDefault (Range.empty types.float)
         )
         (validNumPair Random.float)

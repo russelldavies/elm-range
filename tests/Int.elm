@@ -25,7 +25,7 @@ canonical =
     describe "Verifies Int canonical function"
         [ fuzz2 validMaybeIntPair Range.Fuzz.boundFlagPair "Random bound values and flags" <|
             \(( maybeLowerElement, maybeUpperElement ) as elements) boundFlags ->
-                Range.create types.int maybeLowerElement maybeUpperElement (Just boundFlags)
+                Range.createWith types.int maybeLowerElement maybeUpperElement (Just boundFlags)
                     |> Result.map (validRange elements boundFlags)
                     |> resultFailErr
         ]
@@ -45,17 +45,17 @@ toString =
                     |> resultFailErr
         , test "Infinite range (both sides)" <|
             \_ ->
-                Range.create types.int Nothing Nothing Nothing
+                Range.create types.int Nothing Nothing
                     |> Result.map (Range.toString >> Expect.equal "(,)")
                     |> resultFailErr
         , test "Infinite range (lower)" <|
             \_ ->
-                Range.create types.int Nothing (Just 10) Nothing
+                Range.create types.int Nothing (Just 10)
                     |> Result.map (Range.toString >> Expect.equal "(,10)")
                     |> resultFailErr
         , test "Infinite range (upper)" <|
             \_ ->
-                Range.create types.int (Just 10) Nothing Nothing
+                Range.create types.int (Just 10) Nothing
                     |> Result.map (Range.toString >> Expect.equal "[10,)")
                     |> resultFailErr
         ]

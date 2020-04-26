@@ -1,40 +1,34 @@
 module Range exposing
-    ( BoundFlag(..)
-    , Range
-    , TypeConfig
-    , adj
-    , ce
-    , cr
-    , create
-    , decoder
-    , diff
-    , empty
-    , encode
+    ( Range
+    , empty, create, fromString
     , eq
-    , fromString
-    , ge
-    , gt
-    , intersect
-    , isEmpty
-    , le
-    , lowerBoundInclusive
-    , lowerBoundInfinite
     , lowerElement
-    , lt
-    , merge
-    , neq
-    , nxl
-    , nxr
-    , ov
-    , sl
-    , sr
-    , toString
-    , types
-    , union
-    , upperBoundInclusive
-    , upperBoundInfinite
-    , upperElement
+    , BoundFlag(..), TypeConfig, adj, ce, cr, createWith, decoder, diff, encode, ge, gt, intersect, isEmpty, le, lowerBoundInclusive, lowerBoundInfinite, lt, merge, neq, nxl, nxr, ov, sl, sr, toString, types, union, upperBoundInclusive, upperBoundInfinite, upperElement
     )
+
+{-| Model and operate on a range of values in Elm.
+
+
+# Definition
+
+@docs Range
+
+
+# Creation
+
+@docs empty, create, fromString
+
+
+# Operators
+
+@docs eq
+
+
+# Functions
+
+@docs lowerElement
+
+-}
 
 import Comparison
 import Iso8601
@@ -134,13 +128,27 @@ empty config =
     Range config Empty
 
 
+{-| Create a range in standard form (lower bound inclusive, upper bound
+exclusive).
+-}
 create :
+    TypeConfig subtype
+    -> Maybe subtype
+    -> Maybe subtype
+    -> Result String (Range subtype)
+create config lower upper =
+    createWith config lower upper Nothing
+
+
+{-| Create a range with whatever user specified flags.
+-}
+createWith :
     TypeConfig subtype
     -> Maybe subtype
     -> Maybe subtype
     -> Maybe ( BoundFlag, BoundFlag )
     -> Result String (Range subtype)
-create config lower upper flags =
+createWith config lower upper flags =
     let
         defaultFlags =
             ( Inc, Exc )
@@ -230,7 +238,7 @@ toString range =
 
     -- > Ok True
     Result.map2 Range.eq
-        (Range.create Range.types.int (Just 1) (Just 5) Nothing)
+        (Range.create Range.types.int (Just 1) (Just 5))
         (Range.fromString Range.types.int "[1,4]")
 
 Use this over `(==)` which may cause a runtime error.
@@ -245,8 +253,8 @@ eq r1 r2 =
 
     -- Ok True
     Result.map2 Range.neq
-        (Range.create Range.types.float (Just 1.1) (Just 2.2) Nothing)
-        (Range.create Range.types.float (Just 1.1) (Just 2.3) Nothing)
+        (Range.create Range.types.float (Just 1.1) (Just 2.2))
+        (Range.create Range.types.float (Just 1.1) (Just 2.3))
 
 -}
 neq : Range subtype -> Range subtype -> Bool
@@ -258,8 +266,8 @@ neq r1 r2 =
 
     -- Ok True
     Result.map2 Range.lt
-        (Range.create Range.types.int (Just 1) (Just 10) Nothing)
-        (Range.create Range.types.int (Just 2) (Just 3) Nothing)
+        (Range.create Range.types.int (Just 1) (Just 10))
+        (Range.create Range.types.int (Just 2) (Just 3))
 
 -}
 lt : Range subtype -> Range subtype -> Bool
@@ -271,8 +279,8 @@ lt r1 r2 =
 
     -- Ok True
     Result.map2 Range.gt
-        (Range.create Range.types.int (Just 1) (Just 10) Nothing)
-        (Range.create Range.types.int (Just 1) (Just 5) Nothing)
+        (Range.create Range.types.int (Just 1) (Just 10))
+        (Range.create Range.types.int (Just 1) (Just 5))
 
 -}
 gt : Range subtype -> Range subtype -> Bool
@@ -284,8 +292,8 @@ gt r1 r2 =
 
     -- Ok True
     Result.map2 Range.lte
-        (Range.create Range.types.float (Just 1.1) (Just 2.2) Nothing)
-        (Range.create Range.types.float (Just 1.1) (Just 2.2) Nothing)
+        (Range.create Range.types.float (Just 1.1) (Just 2.2))
+        (Range.create Range.types.float (Just 1.1) (Just 2.2))
 
 -}
 le : Range subtype -> Range subtype -> Bool
@@ -301,8 +309,8 @@ le r1 r2 =
 
     -- Ok True
     Result.map2 Range.gte
-        (Range.create Range.types.float (Just 1.1) (Just 2.2) Nothing)
-        (Range.create Range.types.float (Just 1.1) (Just 2.0) Nothing)
+        (Range.create Range.types.float (Just 1.1) (Just 2.2))
+        (Range.create Range.types.float (Just 1.1) (Just 2.0))
 
 -}
 ge : Range subtype -> Range subtype -> Bool
@@ -318,8 +326,8 @@ ge r1 r2 =
 
     -- Ok True
     Result.map2 Range.cr
-        (Range.create Range.types.int (Just 2) (Just 4) Nothing)
-        (Range.create Range.types.int (Just 2) (Just 3) Nothing)
+        (Range.create Range.types.int (Just 2) (Just 4))
+        (Range.create Range.types.int (Just 2) (Just 3))
 
 -}
 cr : Range subtype -> Range subtype -> Bool
@@ -402,8 +410,8 @@ ce range elem =
 
     -- Ok True
     Result.map2 Range.ov
-        (Range.fromString Range.types.int (Just 3) (Just 7) Nothing)
-        (Range.fromString Range.types.int (Just 4) (Just 12) Nothing)
+        (Range.create Range.types.int (Just 3) (Just 7))
+        (Range.create Range.types.int (Just 4) (Just 12))
 
 -}
 ov : Range subtype -> Range subtype -> Bool
@@ -444,8 +452,8 @@ ov r1 r2 =
 
     -- Ok True
     Result.map2 Range.sl
-        (Range.fromString Range.types.int (Just 1) (Just 10) Nothing)
-        (Range.fromString Range.types.int (Just 100) (Just 110) Nothing)
+        (Range.create Range.types.int (Just 1) (Just 10))
+        (Range.create Range.types.int (Just 100) (Just 110))
 
 -}
 sl : Range subtype -> Range subtype -> Bool
@@ -466,8 +474,8 @@ sl r1 r2 =
 
     -- Ok True
     Result.map2 Range.sr
-        (Range.fromString Range.types.int (Just 50) (Just 60) Nothing)
-        (Range.fromString Range.types.int (Just 20) (Just 30) Nothing)
+        (Range.create Range.types.int (Just 50) (Just 60))
+        (Range.create Range.types.int (Just 20) (Just 30))
 
 -}
 sr : Range subtype -> Range subtype -> Bool
@@ -488,8 +496,8 @@ sr r1 r2 =
 
     -- Ok True
     Result.map2 Range.nxr
-        (Range.fromString Range.types.int (Just 1) (Just 20) Nothing)
-        (Range.fromString Range.types.int (Just 18) (Just 20) Nothing)
+        (Range.create Range.types.int (Just 1) (Just 20))
+        (Range.create Range.types.int (Just 18) (Just 20))
 
 -}
 nxr : Range subtype -> Range subtype -> Bool
@@ -511,8 +519,8 @@ nxr r1 r2 =
 
     -- Ok True
     Result.map2 Range.nxl
-        (Range.fromString Range.types.int (Just 7) (Just 20) Nothing)
-        (Range.fromString Range.types.int (Just 5) (Just 10) Nothing)
+        (Range.create Range.types.int (Just 7) (Just 20))
+        (Range.create Range.types.int (Just 5) (Just 10))
 
 -}
 nxl : Range subtype -> Range subtype -> Bool
@@ -534,8 +542,8 @@ nxl r1 r2 =
 
     -- Ok True
     Result.map2 Range.adj
-        (Range.fromString Range.types.float (Just 1.1) (Just 2.2) Nothing)
-        (Range.fromString Range.types.float (Just 2.2) (Just 3.3) Nothing)
+        (Range.create Range.types.float (Just 1.1) (Just 2.2))
+        (Range.create Range.types.float (Just 2.2) (Just 3.3))
 
 -}
 adj : Range subtype -> Range subtype -> Bool
@@ -572,8 +580,8 @@ adj r1 r2 =
 
     -- Ok "[5,20)"
     Result.map2 Range.adj
-        (Range.create Range.types.float (Just 5) (Just 15) Nothing)
-        (Range.create Range.types.float (Just 10) (Just 20) Nothing)
+        (Range.create Range.types.float (Just 5) (Just 15))
+        (Range.create Range.types.float (Just 10) (Just 20))
         |> Result.map Range.toString
 
 -}
@@ -628,8 +636,8 @@ union r1 r2 =
 
     -- Ok [10,15)
     Result.map2 Range.intersect
-        (Range.create Range.types.float (Just 5) (Just 15) Nothing)
-        (Range.create Range.types.float (Just 10) (Just 20) Nothing)
+        (Range.create Range.types.float (Just 5) (Just 15))
+        (Range.create Range.types.float (Just 10) (Just 20))
         |> Result.map Range.toString
 
 -}
@@ -684,8 +692,8 @@ intersect r1 r2 =
 
     -- Ok [5,10)
     Result.map2 Range.intersect
-        (Range.create Range.types.float (Just 5) (Just 15) Nothing)
-        (Range.create Range.types.float (Just 10) (Just 20) Nothing)
+        (Range.create Range.types.float (Just 5) (Just 15))
+        (Range.create Range.types.float (Just 10) (Just 20))
         |> Result.toString
 
 -}
@@ -759,6 +767,8 @@ diff r1 r2 =
 -- FUNCTIONS
 
 
+{-| Lower bound of range
+-}
 lowerElement : Range subtype -> Maybe subtype
 lowerElement range =
     case range.range of
