@@ -3,9 +3,10 @@
 Model and operate on a range of values in Elm.
 
 ```elm
-> range1 = (Range.fromString Range.types.int "[1,5]")
-> range2 = (Range.fromString Range.types.int "(4,10]")
-> Result.map2 Range.merge range1 range2 |> Result.map Range.toString -- Ok "[1,11)"
+Result.map2 Range.merge
+    (Range.fromString Range.types.int "[1,5]")
+    (Range.fromString Range.types.int "(4,10]")
+    |> Result.map Range.toString -- Ok "[1,11)"
 ```
 
 ## Overview

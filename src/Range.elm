@@ -1,9 +1,11 @@
 module Range exposing
-    ( Range
-    , empty, create, fromString
-    , eq
-    , lowerElement
-    , BoundFlag(..), TypeConfig, adj, ce, cr, createWith, decoder, diff, encode, ge, gt, intersect, isEmpty, le, lowerBoundInclusive, lowerBoundInfinite, lt, merge, neq, nxl, nxr, ov, sl, sr, toString, types, union, upperBoundInclusive, upperBoundInfinite, upperElement
+    ( Range, TypeConfig, Canonical
+    , empty, create, createWith, BoundFlag(..), fromString, types
+    , toString, decoder, encode
+    , eq, neq, lt, gt, le, ge, cr, ce, ov, sl, sr, nxr, nxl, adj, union
+    , intersect, diff
+    , lowerElement, upperElement, isEmpty, lowerBoundInclusive
+    , upperBoundInclusive, lowerBoundInfinite, upperBoundInfinite, merge
     )
 
 {-| Model and operate on a range of values in Elm.
@@ -11,22 +13,29 @@ module Range exposing
 
 # Definition
 
-@docs Range
+@docs Range, TypeConfig, Canonical
 
 
 # Creation
 
-@docs empty, create, fromString
+@docs empty, create, createWith, BoundFlag, fromString, types
+
+
+# Serialization
+
+@docs toString, decoder, encode
 
 
 # Operators
 
-@docs eq
+@docs eq, neq, lt, gt, le, ge, cr, ce, ov, sl, sr, nxr, nxl, adj, union
+@docs intersect, diff
 
 
 # Functions
 
-@docs lowerElement
+@docs lowerElement, upperElement, isEmpty, lowerBoundInclusive
+@docs upperBoundInclusive, lowerBoundInfinite, upperBoundInfinite, merge
 
 -}
 
@@ -42,14 +51,49 @@ import Time
 -- MODELS
 
 
-{-| Be aware that a Range stores functions internally.
-If you want to use `(==)` for comparing two Ranges use the [eq](#eq)
-operator.
+{-| A range of a certain type that stores information about its bounds.
+
+Be aware that a Range stores functions internally. If you want to use `(==)`
+for comparing two Ranges use the [eq](#eq) operator.
+
 -}
 type alias Range subtype =
     { config : TypeConfig subtype
     , range : RangeInternal subtype
     }
+
+
+{-| When you need to use a custom type you must create an instance of this.
+
+This acts as a value level typeclass.
+
+-}
+type alias TypeConfig subtype =
+    { toString : subtype -> String
+    , fromString : String -> Result String subtype
+    , compare : subtype -> subtype -> Order
+    , canonical : Maybe (Canonical subtype)
+    }
+
+
+{-| A discrete range type should have a canonicalization function that is aware of
+the desired step size for the element type. The canonicalization function is
+charged with converting equivalent values of the range type to have
+identical representations, in particular consistently inclusive or exclusive
+bounds. If a canonicalization function is not specified, then ranges with
+different formatting will always be treated as unequal, even though they
+might represent the same set of values in reality.
+
+Here is the definition for an integer range:
+
+    ( ( Inc, (+) 1 ), ( Exc, (+) 1 ) )
+
+It specifies that the lower bound should be inclusive and the upper exclusive.
+If the supplied bound flags are different during creating then step the value by
+
+-}
+type alias Canonical subtype =
+    ( ( BoundFlag, subtype -> subtype ), ( BoundFlag, subtype -> subtype ) )
 
 
 type RangeInternal subtype
@@ -63,23 +107,6 @@ type Bound subtype
     | Infinite
 
 
-type alias TypeConfig subtype =
-    { toString : subtype -> String
-    , fromString : String -> Result String subtype
-    , compare : subtype -> subtype -> Order
-    , canonical : Maybe (Canonical subtype)
-    }
-
-
-type alias Canonical subtype =
-    ( ( BoundFlag, subtype -> subtype ), ( BoundFlag, subtype -> subtype ) )
-
-
-type BoundFlag
-    = Inc
-    | Exc
-
-
 {-| Used internally for deserialization
 -}
 type BoundType
@@ -91,6 +118,14 @@ type BoundType
 -- TYPE CLASSES
 
 
+{-| Built-in [TypeConfigs](#TypeConfig) for common types.
+-}
+types :
+    { int : TypeConfig Int
+    , float : TypeConfig Float
+    , string : TypeConfig String
+    , timestamp : TypeConfig Time.Posix
+    }
 types =
     { int =
         { toString = String.fromInt
@@ -123,6 +158,11 @@ types =
 -- CREATE
 
 
+{-| Create an empty range
+
+    Range.empty Range.types.int
+
+-}
 empty : TypeConfig subtype -> Range subtype
 empty config =
     Range config Empty
@@ -130,6 +170,9 @@ empty config =
 
 {-| Create a range in standard form (lower bound inclusive, upper bound
 exclusive).
+
+    Range.create Range.types.float (Just 1.2) Nothing
+
 -}
 create :
     TypeConfig subtype
@@ -141,6 +184,9 @@ create config lower upper =
 
 
 {-| Create a range with whatever user specified flags.
+
+    Range.create Range.types.float (Just 1.5) (Just 12.2) (Just ( Range.Inc, Range.Inc ))
+
 -}
 createWith :
     TypeConfig subtype
@@ -157,6 +203,19 @@ createWith config lower upper flags =
         |> Result.map (Range config)
 
 
+{-| The kind of bounds, inclusive or exclusive, to be supplied to
+[createWith](#createWith).
+-}
+type BoundFlag
+    = Inc
+    | Exc
+
+
+{-| Create a range from a string.
+
+    Range.fromString Range.types.int "(1,5)"
+
+-}
 fromString :
     TypeConfig subtype
     -> String
@@ -189,6 +248,13 @@ fromString config str =
                 |> Err
 
 
+{-| Convert a range to its string representation.
+
+    -- Ok [1,2)
+    Range.create Range.types.int (Just 1) (Just 2)
+        |> Result.map Range.toString
+
+-}
 toString : Range subtype -> String
 toString range =
     let
@@ -767,7 +833,14 @@ diff r1 r2 =
 -- FUNCTIONS
 
 
-{-| Lower bound of range
+{-| The element of a range's lower bound.
+
+    -- Ok (Just 1.1)
+    Range.create Range.types.float (Just 1.1) (Just 2.2)
+        |> Result.map Range.lowerElement
+
+If the range is empty or the bound infinity then the result is `Nothing`.
+
 -}
 lowerElement : Range subtype -> Maybe subtype
 lowerElement range =
@@ -779,6 +852,15 @@ lowerElement range =
             Nothing
 
 
+{-| The element of a range's upper bound.
+
+    -- Ok (Just 2.2)
+    Range.create Range.types.float (Just 1.1) (Just 2.2)
+        |> Result.map Range.upperElement
+
+If the range is empty or the bound infinity then the result is `Nothing`.
+
+-}
 upperElement : Range subtype -> Maybe subtype
 upperElement range =
     case range.range of
@@ -789,6 +871,13 @@ upperElement range =
             Nothing
 
 
+{-| Is the range empty?
+
+    -- Ok False
+    Range.create Range.types.float (Just 1.1) (Just 2.2)
+        |> Result.map Range.isEmpty
+
+-}
 isEmpty : Range subtype -> Bool
 isEmpty range =
     case range.range of
@@ -799,6 +888,15 @@ isEmpty range =
             True
 
 
+{-| Is the lower bound inclusive.
+
+    -- Ok True
+    Range.create Range.types.float (Just 1.1) (Just 2.2)
+        |> Result.map Range.lowerBoundInclusive
+
+If a range is empty or the lower bound is infinite then it is not inclusive.
+
+-}
 lowerBoundInclusive : Range subtype -> Bool
 lowerBoundInclusive range =
     case range.range of
@@ -809,6 +907,15 @@ lowerBoundInclusive range =
             False
 
 
+{-| Is the upper bound inclusive.
+
+    -- Ok False
+    Range.create Range.types.float (Just 1.1) (Just 2.2)
+        |> Result.map Range.upperBoundInclusive
+
+If a range is empty or the upper bound is infinite then it is not inclusive.
+
+-}
 upperBoundInclusive : Range subtype -> Bool
 upperBoundInclusive range =
     case range.range of
@@ -819,6 +926,15 @@ upperBoundInclusive range =
             False
 
 
+{-| Is the lower bound infinite.
+
+    -- Ok True
+    Range.create Range.types.float Nothing (Just 2.2)
+        |> Result.map Range.lowerBoundInfinite
+
+If a range is empty then it is not infinite.
+
+-}
 lowerBoundInfinite : Range subtype -> Bool
 lowerBoundInfinite range =
     case range.range of
@@ -829,6 +945,15 @@ lowerBoundInfinite range =
             False
 
 
+{-| Is the upper bound infinite.
+
+    -- Ok False
+    Range.create Range.types.float Nothing (Just 2.2)
+        |> Result.map Range.upperBoundInfinite
+
+If a range is empty then it is not infinite.
+
+-}
 upperBoundInfinite : Range subtype -> Bool
 upperBoundInfinite range =
     case range.range of
@@ -842,6 +967,12 @@ upperBoundInfinite range =
 {-| The smallest range which includes both of the given ranges.
 
 Like set union, except also allow and account for non-adjacent input ranges.
+
+    -- Ok "[1,4)"
+    Result.map2 Range.merge
+        (Range.create Range.types.int (Just 1) (Just 2))
+        (Range.create Range.types.int (Just 3) (Just 4))
+        |> Result.map Range.toString
 
 -}
 merge : Range subtype -> Range subtype -> Range subtype
@@ -883,7 +1014,7 @@ merge range1 range2 =
 -- JSON
 
 
-{-| RangeInternal JSON decoder
+{-| JSON decoder
 -}
 decoder :
     TypeConfig subtype
@@ -901,7 +1032,7 @@ decoder config =
             )
 
 
-{-| Encode RangeInternal to JSON
+{-| Encode a `Range` to JSON
 -}
 encode : Range subtype -> Encode.Value
 encode =
